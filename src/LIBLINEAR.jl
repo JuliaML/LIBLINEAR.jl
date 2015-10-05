@@ -118,7 +118,7 @@ end
 # helper
 function indices_and_weights{T, U<:Real}(labels::AbstractVector{T},
             instances::AbstractMatrix{U},
-            weights::Union{Dict{T, Float64}, Void)=nothing}
+            weights::Union{Dict{T, Float64}, Void}=nothing)
 
     label_dict = Dict{T, Cint}()
     reverse_labels = Array(T, 0)
