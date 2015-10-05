@@ -224,6 +224,11 @@ say("=2")
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
+say(idx)
+say(reverse_labels)
+say(weights)
+say(weight_labels)
+
   param = Array(Parameter, 1)
   param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p, init_sol)
 
