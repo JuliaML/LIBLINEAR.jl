@@ -69,13 +69,13 @@ let liblinear=C_NULL
   function get_liblinear()
     if liblinear == C_NULL
       liblinear = dlopen(joinpath(Pkg.dir(), "LIBLINEAR", "deps", "liblinear.so.3"))
-      ccall(dlsym(liblinear, :set_print_string_function), Void, (Ptr{Void},), cfunction(linear_print, Void, (Ptr{Uint8},)))
+      ccall(dlsym(liblinear, :set_print_string_function), Void, (Ptr{Void},), cfunction(linear_print, Void, (Ptr{UInt8},)))
     end
     liblinear
   end
 end
 
-function linear_print(str::Ptr{Uint8})
+function linear_print(str::Ptr{UInt8})
     if verbosity::Bool
         print(bytestring(str))
     end
@@ -118,7 +118,7 @@ end
 # helper
 function indices_and_weights{T, U<:Real}(labels::AbstractVector{T},
             instances::AbstractMatrix{U},
-            weights::Union(Dict{T, Float64}, Nothing)=nothing)
+            weights::Union{Dict{T, Float64}, Void)=nothing}
 
     label_dict = Dict{T, Cint}()
     reverse_labels = Array(T, 0)
@@ -193,7 +193,7 @@ function train{T, U<:Real}(
           labels::AbstractVector{T},
           instances::AbstractMatrix{U};
           # default parameters
-          weights=::Union(Dict{T, Float64}, Nothing)=nothing,
+          weights=::Union{Dict{T, Float64}, Void}=nothing,
           solver_type::Cint=L2R_L2LOSS_SVC_DUAL,
           eps::Float64=Inf,
           C::Float64=1.0,
