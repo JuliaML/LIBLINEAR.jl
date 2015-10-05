@@ -4,6 +4,11 @@ module LIBLINEAR
 
 export train, predict
 
+# debug
+function say(sth)
+  println(sth)
+end
+
 # enums
 const L2R_LR = Cint(0)
 const L2R_L2LOSS_SVC_DUAL = Cint(1)
@@ -199,9 +204,9 @@ function train{T, U<:Real}(
           C::Float64=1.0,
           p::Float64=0.1,
           # Initial-solution specification supported for solver L2R_LR and L2R_L2LOSS_SVC
-          init_sol::Ptr{Float64}=C_NULL,
+          init_sol::Union{Ptr{Float64}, Ptr{Void}}=C_NULL,
           # problem parameter
-          bias::Float64=-1,
+          bias::Float64=-1.0,
           verbose::Bool=false
           )
 
