@@ -74,7 +74,7 @@ let liblinear=C_NULL
   function get_liblinear()
     if liblinear == C_NULL
       liblinear = Libdl.dlopen(joinpath(Pkg.dir(), "LIBLINEAR", "deps", "liblinear.so.3"))
-      ccall(dlsym(liblinear, :set_print_string_function), Void, (Ptr{Void},), cfunction(linear_print, Void, (Ptr{UInt8},)))
+      ccall(Libdl.dlsym(liblinear, :set_print_string_function), Void, (Ptr{Void},), cfunction(linear_print, Void, (Ptr{UInt8},)))
     end
     liblinear
   end
@@ -94,7 +94,7 @@ macro cachedsym(symname)
         let $cached = C_NULL
             global ($symname)
             ($symname)() = ($cached) == C_NULL ?
-                ($cached = dlsym(get_liblinear(), $(string(symname)))) : $cached
+                ($cached = Libdl.dlsym(get_liblinear(), $(string(symname)))) : $cached
         end
     end
 end

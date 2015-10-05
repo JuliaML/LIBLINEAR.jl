@@ -1,6 +1,11 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+*.o
+*.a
+*.so.1
+*.so.2
+*.so.3
 
 #################
 ## Eclipse
@@ -218,4 +223,3 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
-
