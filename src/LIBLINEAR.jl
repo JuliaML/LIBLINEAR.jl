@@ -5,40 +5,40 @@ module LIBLINEAR
 export train, predict
 
 # enums
-const L2R_LR = int32(0)
-const L2R_L2LOSS_SVC_DUAL = int32(1)
-const L2R_L2LOSS_SVC = int32(2)
-const L2R_L1LOSS_SVC_DUAL = int32(3)
-const MCSVM_CS = int32(4)
-const L1R_L2LOSS_SVC = int32(5)
-const L1R_LR = int32(6)
-const L2R_LR_DUAL = int32(7)
-const L2R_L2LOSS_SVR  = int32(11)
-const L2R_L2LOSS_SVR_DUAL = int32(12)
-const L2R_L1LOSS_SVR_DUAL = int32(13)
+const L2R_LR = Cint(0)
+const L2R_L2LOSS_SVC_DUAL = Cint(1)
+const L2R_L2LOSS_SVC = Cint(2)
+const L2R_L1LOSS_SVC_DUAL = Cint(3)
+const MCSVM_CS = Cint(4)
+const L1R_L2LOSS_SVC = Cint(5)
+const L1R_LR = Cint(6)
+const L2R_LR_DUAL = Cint(7)
+const L2R_L2LOSS_SVR  = Cint(11)
+const L2R_L2LOSS_SVR_DUAL = Cint(12)
+const L2R_L1LOSS_SVR_DUAL = Cint(13)
 
 verbosity = true
 
 immutable FeatureNode
-  index::Int32 # Question: Why not Int64?
+  index::Cint
   value::Float64
 end
 
 immutable Problem
-  l::Int32 # num of instances
-  n::Int32 # num of features, including bias feature if bias >= 0
+  l::Cint # num of instances
+  n::Cint # num of features, including bias feature if bias >= 0
   y::Ptr{Float64} # target values
   x::Ptr{Ptr{FeatureNode}} # sparse rep. (array of feature_node) of one training vector
   bias::Float64 # if bias >= 0, isntance x becomes [x; bias]; if < 0, no bias term (default -1)
 end
 
 immutable Parameter
-  solver_type::Int32
+  solver_type::Cint
 
   eps::Float64
   C::Float64
-  nr_weight::Int32
-  weight_label::Ptr{Int32}
+  nr_weight::Cint
+  weight_label::Ptr{Cint}
   weight::Ptr{Float64}
   p::Float64
   # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
@@ -56,7 +56,7 @@ type Model{T}
   nodeptr::Vector{Ptr{FeatureNode}}
 
   labels::Vector{T}
-  weight_labels::Vector{Int32}
+  weight_labels::Vector{Cint}
   weights::Vector{Float64}
   nfeatures::Int
   bias::Float64
@@ -100,7 +100,7 @@ end
 
 # helper indices_and_weights' helper
 function grp2idx{T, S <: Real}(::Type{S}, labels::AbstractVector,
-    label_dict::Dict{T, Int32}, reverse_labels::Vector{T})
+    label_dict::Dict{T, Cint}, reverse_labels::Vector{T})
 
     idx = Array(S, length(labels))
     nextkey = length(reverse_labels) + 1
@@ -120,7 +120,7 @@ function indices_and_weights{T, U<:Real}(labels::AbstractVector{T},
             instances::AbstractMatrix{U},
             weights::Union(Dict{T, Float64}, Nothing)=nothing)
 
-    label_dict = Dict{T, Int32}()
+    label_dict = Dict{T, Cint}()
     reverse_labels = Array(T, 0)
     idx = grp2idx(Float64, labels, label_dict, reverse_labels)
 
@@ -132,10 +132,10 @@ function indices_and_weights{T, U<:Real}(labels::AbstractVector{T},
 
     # Construct Parameters
     if weights == nothing || length(weights) == 0
-        weight_labels = Int32[]
+        weight_labels = Cint[]
         weights = Float64[]
     else
-        weight_labels = grp2idx(Int32, keys(weights), label_dict,
+        weight_labels = grp2idx(Cint, keys(weights), label_dict,
             reverse_labels)
         weights = float64(values(weights))
     end
@@ -153,10 +153,10 @@ function instances2nodes{U<:Real}(instances::AbstractMatrix{U})
     for i=1:ninstances
         k = 1
         for j=1:nfeatures
-            nodes[k, i] = FeatureNode(int32(j), float64(instances[j, i]))
+            nodes[k, i] = FeatureNode(Cint(j), float64(instances[j, i]))
             k += 1
         end
-        nodes[k, i] = FeatureNode(int32(-1), NaN)
+        nodes[k, i] = FeatureNode(Cint(-1), NaN)
         nodeptrs[i] = pointer(nodes, (i-1)*(nfeatures+1)+1)
     end
 
@@ -175,11 +175,11 @@ function instances2nodes{U<:Real}(instances::SparseMatrixCSC{U})
         nodeptrs[i] = pointer(nodes, k)
         while j < instances.colptr[i+1]
             val = instances.nzval[j]
-            nodes[k] = FeatureNode(int32(instances.rowval[j]), float64(val))
+            nodes[k] = FeatureNode(Cint(instances.rowval[j]), float64(val))
             k += 1
             j += 1
         end
-        nodes[k] = FeatureNode(int32(-1), NaN)
+        nodes[k] = FeatureNode(Cint(-1), NaN)
         k += 1
     end
 
@@ -194,7 +194,7 @@ function train{T, U<:Real}(
           instances::AbstractMatrix{U};
           # default parameters
           weights=::Union(Dict{T, Float64}, Nothing)=nothing,
-          solver_type::Int32=L2R_L2LOSS_SVC_DUAL,
+          solver_type::Cint=L2R_L2LOSS_SVC_DUAL,
           eps::Float64=Inf,
           C::Float64=1.0,
           p::Float64=0.1,
@@ -220,11 +220,11 @@ function train{T, U<:Real}(
       instances, weights)
 
   param = Array(Parameter, 1)
-  param[1] = Parameter(solver_type, eps, C, int32(length(weights), pointer(weight_labels), pointer(weights), p, init_sol))
+  param[1] = Parameter(solver_type, eps, C, Cint(length(weights), pointer(weight_labels), pointer(weights), p, init_sol))
 
   # construct problem
   (nodes, nodeptrs) = instances2nodes(instances)
-  problem = Problem[Problem(int32(size(instances, 2)), int32(size(instances, 1)), 0, pointer(idx), pointer(nodeptrs), bias)]
+  problem = Problem[Problem(Cint(size(instances, 2)), Cint(size(instances, 1)), 0, pointer(idx), pointer(nodeptrs), bias)]
 
   verbosity = verbose
   ptr = ccall(train(), Ptr{Void}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
