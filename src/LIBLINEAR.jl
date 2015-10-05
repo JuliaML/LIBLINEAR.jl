@@ -193,7 +193,7 @@ function train{T, U<:Real}(
           labels::AbstractVector{T},
           instances::AbstractMatrix{U};
           # default parameters
-          weights=::Union{Dict{T, Float64}, Void}=nothing,
+          weights::Union{Dict{T, Float64}, Void}=nothing,
           solver_type::Cint=L2R_L2LOSS_SVC_DUAL,
           eps::Float64=Inf,
           C::Float64=1.0,
