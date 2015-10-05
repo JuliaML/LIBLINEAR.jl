@@ -47,7 +47,7 @@ immutable Parameter
   weight::Ptr{Float64}
   p::Float64
   # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
-  init_sol::Ptr{Float64}
+  init_sol::Union{Ptr{Float64},Ptr{Void}}
 end
 
 # model
@@ -73,7 +73,7 @@ let liblinear=C_NULL
   global get_liblinear
   function get_liblinear()
     if liblinear == C_NULL
-      liblinear = dlopen(joinpath(Pkg.dir(), "LIBLINEAR", "deps", "liblinear.so.3"))
+      liblinear = Libdl.dlopen(joinpath(Pkg.dir(), "LIBLINEAR", "deps", "liblinear.so.3"))
       ccall(dlsym(liblinear, :set_print_string_function), Void, (Ptr{Void},), cfunction(linear_print, Void, (Ptr{UInt8},)))
     end
     liblinear
@@ -158,7 +158,7 @@ function instances2nodes{U<:Real}(instances::AbstractMatrix{U})
     for i=1:ninstances
         k = 1
         for j=1:nfeatures
-            nodes[k, i] = FeatureNode(Cint(j), float64(instances[j, i]))
+            nodes[k, i] = FeatureNode(Cint(j), Float64(instances[j, i]))
             k += 1
         end
         nodes[k, i] = FeatureNode(Cint(-1), NaN)
@@ -211,7 +211,7 @@ function train{T, U<:Real}(
           )
 
   global verbosity
-
+say("=1")
   # set eps
   eps = solver_type == L2R_LR || solver_type == L2R_L2LOSS_SVC ||
         solver_type == L1R_L2LOSS_SVC || solver_type == L1R_LR ? 0.01 :
@@ -219,17 +219,17 @@ function train{T, U<:Real}(
         solver_type == L2R_L2LOSS_SVC_DUAL || solver_type == L2R_L1LOSS_SVC_DUAL ||
         solver_type == MCSVM_CS || solver_type == L2R_LR_DUAL ||
         solver_type == L2R_L2LOSS_SVR_DUAL || solver_type == L2R_L1LOSS_SVR_DUAL ? 0.1 :0.001
-
+say("=2")
   # construct nr_weight, weight_label, weight
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
   param = Array(Parameter, 1)
-  param[1] = Parameter(solver_type, eps, C, Cint(length(weights), pointer(weight_labels), pointer(weights), p, init_sol))
+  param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p, init_sol)
 
   # construct problem
   (nodes, nodeptrs) = instances2nodes(instances)
-  problem = Problem[Problem(Cint(size(instances, 2)), Cint(size(instances, 1)), 0, pointer(idx), pointer(nodeptrs), bias)]
+  problem = Problem[Problem(Cint(size(instances, 2)), Cint(size(instances, 1)), pointer(idx), pointer(nodeptrs), bias)]
 
   verbosity = verbose
   ptr = ccall(train(), Ptr{Void}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
