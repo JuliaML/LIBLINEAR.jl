@@ -25,11 +25,11 @@ immutable FeatureNode
 end
 
 immutable Problem
-  l::Int32
-  n::Int32 # what's n????
-  y::Ptr{Float64}
-  x::Ptr{Ptr{FeatureNode}}
-  bias::Float64
+  l::Int32 # num of instances
+  n::Int32 # num of features, including bias feature if bias >= 0
+  y::Ptr{Float64} # target values
+  x::Ptr{Ptr{FeatureNode}} # sparse rep. (array of feature_node) of one training vector
+  bias::Float64 # if bias >= 0, isntance x becomes [x; bias]; if < 0, no bias term (default -1)
 end
 
 immutable Parameter
@@ -41,11 +41,27 @@ immutable Parameter
   weight_label::Ptr{Int32}
   weight::Ptr{Float64}
   p::Float64
+  # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
   init_sol::Ptr{Float64}
 end
 
-# todo: LINEARModel
-# 66-80
+# model
+type Model{T}
+  ptr::Ptr{Void}
+  param::Vector{Parameter}
+
+  # prevent these from being garbage collected
+  problem::Vector{Problem}
+  nodes::Array{FeatureNode}
+  nodeptr::Vector{Ptr{FeatureNode}}
+
+  labels::Vector{T}
+  weight_labels::Vector{Int32}
+  weights::Vector{Float64}
+  nfeatures::Int
+  bias::Float64
+  verbose::Bool
+end
 
 # set print function
 let liblinear=C_NULL
@@ -171,47 +187,58 @@ function instances2nodes{U<:Real}(instances::SparseMatrixCSC{U})
 end
 
 # train
+# - instances: instances are colums
 function train{T, U<:Real}(
           # labels & data
           labels::AbstractVector{T},
           instances::AbstractMatrix{U};
-          # parameters
+          # default parameters
           weights=::Union(Dict{T, Float64}, Nothing)=nothing,
-          solver_type::Int32=L2R_LR,
-          eps::Float64=0.001,
+          solver_type::Int32=L2R_L2LOSS_SVC_DUAL,
+          eps::Float64=Inf,
           C::Float64=1.0,
           p::Float64=0.1,
-          # init_sol?
+          # Initial-solution specification supported for solver L2R_LR and L2R_L2LOSS_SVC
+          init_sol::Ptr{Float64}=C_NULL,
+          # problem parameter
+          bias::Float64=-1,
           verbose::Bool=false
           )
+
   global verbosity
 
-  # get init_sol
-  #init_sol=?
+  # set eps
+  eps = solver_type == L2R_LR || solver_type == L2R_L2LOSS_SVC ||
+        solver_type == L1R_L2LOSS_SVC || solver_type == L1R_LR ? 0.01 :
+        solver_type == L2R_L2LOSS_SVR ? 0.001 :
+        solver_type == L2R_L2LOSS_SVC_DUAL || solver_type == L2R_L1LOSS_SVC_DUAL ||
+        solver_type == MCSVM_CS || solver_type == L2R_LR_DUAL ||
+        solver_type == L2R_L2LOSS_SVR_DUAL || solver_type == L2R_L1LOSS_SVR_DUAL ? 0.1 :0.001
 
   # construct nr_weight, weight_label, weight
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
   param = Array(Parameter, 1)
-  param[1] = Parameter(solver_type, eps, C, int32(length(weights), pointer(weight_labels), pointer(weights), p, nothing)) # init_sol???
+  param[1] = Parameter(solver_type, eps, C, int32(length(weights), pointer(weight_labels), pointer(weights), p, init_sol))
 
   # construct problem
   (nodes, nodeptrs) = instances2nodes(instances)
-  problem = Problem[Problem(int32(size(instances, 2)), 0, pointer(idx), pointer(nodeptrs))] # what's n???
+  problem = Problem[Problem(int32(size(instances, 2)), int32(size(instances, 1)), 0, pointer(idx), pointer(nodeptrs), bias)]
 
   verbosity = verbose
   ptr = ccall(train(), Ptr{Void}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
 
-  model = Model() # params for model????
+  model = Model(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, size(instances, 1), bias, verbose)
   finalizer(model, linear_free)
   model
-end # module
+end
 
 # helper
 linear_free(model::Model) = ccall(free_model_content(), Void, (Ptr{Void},), model.ptr)
 
 # predict
+# - instances: instances are colums
 function predict{T, U<:Real}(
           model::Model{T},
           instances::AbstractMatrix{U};
@@ -237,3 +264,5 @@ function predict{T, U<:Real}(
       class[i] = model.labels[int(output)]
   end
 end
+
+end # module
