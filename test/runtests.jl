@@ -22,7 +22,7 @@ instances = convert(Array,iris[:, 1:4])'
 # Train SVM on half of the data using default parameters. See the svmtrain
 # function in LIBSVM.jl for optional parameter settings.
 # model = train(ones(length(labels[1:2:end])), instances[:, 1:2:end]);
-model = linear_train(labels[1:5], instances[:, 1:5]);
+model = linear_train(labels[1:2:end], instances[:, 1:2:end]);
 
 # Test model on the other half of the data.
 (predicted_labels, decision_values) = linear_predict(model, instances[:, 2:2:end]);

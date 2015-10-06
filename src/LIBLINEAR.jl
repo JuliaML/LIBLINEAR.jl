@@ -225,21 +225,21 @@ say("=2")
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
-say("- labels:")
-#say(length(labels))
-#say(labels)
-say("- instances:")
-#say(size(instances))
-#say(instances)
-say("- idx:")
-#say(length(idx))
-#say(idx)
-say("- reverse_labels:")
-#say(reverse_labels)
-say("- weights:")
-#say(weights)
-say("- weight_labels:")
-#say(weight_labels)
+# say("- labels:")
+# #say(length(labels))
+# #say(labels)
+# say("- instances:")
+# #say(size(instances))
+# #say(instances)
+# say("- idx:")
+# #say(length(idx))
+# #say(idx)
+# say("- reverse_labels:")
+# #say(reverse_labels)
+# say("- weights:")
+# #say(weights)
+# say("- weight_labels:")
+# #say(weight_labels)
 
   param = Array(Parameter, 1)
   param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p)#, init_sol)
@@ -290,7 +290,6 @@ function linear_predict{T, U<:Real}(
   class = Array(T, ninstances)
   nlabels = length(model.labels)
   decvalues = Array(Float64, nlabels, ninstances)
-
   verbosity = model.verbose
   fn = probability_estimates ? predict_probability() :
       predict_values()
@@ -299,6 +298,8 @@ function linear_predict{T, U<:Real}(
           model.ptr, nodeptrs[i], pointer(decvalues, nlabels*(i-1)+1))
       class[i] = model.labels[round(Int,output)]
   end
+
+  (class, decvalues)
 end
 
 end # module
