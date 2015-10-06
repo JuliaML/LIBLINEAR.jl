@@ -2998,8 +2998,14 @@ void destroy_param(parameter* param)
 		free(param->init_sol);
 }
 
+
 const char *check_parameter(const problem *prob, const parameter *param)
 {
+	char *buffer = (char*) malloc(1000*sizeof(char));
+	sprintf(buffer, "debug info: eps=%f, C=%f, p=%f, solver_type:%d\n",
+		param->eps, param->C, param->p, param->solver_type);
+	
+	return buffer;
 	if(param->eps <= 0)
 		return "eps <= 0";
 

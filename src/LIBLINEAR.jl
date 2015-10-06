@@ -2,7 +2,7 @@ module LIBLINEAR
 
 # package code goes here
 
-export train, predict
+export linear_train, linear_predict
 
 # debug
 function say(sth)
@@ -47,7 +47,7 @@ immutable Parameter
   weight::Ptr{Float64}
   p::Float64
   # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
-  init_sol::Union{Ptr{Float64},Ptr{Void}}
+  #init_sol::Union{Ptr{Float64},Ptr{Void}}
 end
 
 # model
@@ -102,6 +102,7 @@ end
 @cachedsym predict_values
 @cachedsym predict_probability
 @cachedsym free_model_content
+@cachedsym check_parameter
 
 # helper indices_and_weights' helper
 function grp2idx{T, S <: Real}(::Type{S}, labels::AbstractVector,
@@ -193,7 +194,7 @@ end
 
 # train
 # - instances: instances are colums
-function train{T, U<:Real}(
+function linear_train{T, U<:Real}(
           # labels & data
           labels::AbstractVector{T},
           instances::AbstractMatrix{U};
@@ -224,21 +225,46 @@ say("=2")
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
-say(idx)
-say(reverse_labels)
-say(weights)
-say(weight_labels)
+say("- labels:")
+#say(length(labels))
+#say(labels)
+say("- instances:")
+#say(size(instances))
+#say(instances)
+say("- idx:")
+#say(length(idx))
+#say(idx)
+say("- reverse_labels:")
+#say(reverse_labels)
+say("- weights:")
+#say(weights)
+say("- weight_labels:")
+#say(weight_labels)
 
   param = Array(Parameter, 1)
-  param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p, init_sol)
-
+  param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p)#, init_sol)
+say("=3")
+say(param[1])
   # construct problem
   (nodes, nodeptrs) = instances2nodes(instances)
+say("- nodes:")
+#say(nodes)
+say("- nodeptrs:")
+#say(nodeptrs)
   problem = Problem[Problem(Cint(size(instances, 2)), Cint(size(instances, 1)), pointer(idx), pointer(nodeptrs), bias)]
-
+say("=4")
+say(problem[1])
   verbosity = verbose
-  ptr = ccall(train(), Ptr{Void}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
 
+  chk = ccall(check_parameter(), Ptr{UInt8}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
+
+  if chk != C_NULL
+    println("check parameter: $(bytestring(chk))")
+  end
+#return chk
+say("=4.5")
+  ptr = ccall(train(), Ptr{Void}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
+say("=5")
   model = Model(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, size(instances, 1), bias, verbose)
   finalizer(model, linear_free)
   model
@@ -249,7 +275,7 @@ linear_free(model::Model) = ccall(free_model_content(), Void, (Ptr{Void},), mode
 
 # predict
 # - instances: instances are colums
-function predict{T, U<:Real}(
+function linear_predict{T, U<:Real}(
           model::Model{T},
           instances::AbstractMatrix{U};
           probability_estimates::Bool=false)
@@ -266,12 +292,12 @@ function predict{T, U<:Real}(
   decvalues = Array(Float64, nlabels, ninstances)
 
   verbosity = model.verbose
-  fn = probability_estimates ? svm_predict_probability() :
-      svm_predict_values()
+  fn = probability_estimates ? predict_probability() :
+      predict_values()
   for i = 1:ninstances
-      output = ccall(fn, Float64, (Ptr{Void}, Ptr{SVMNode}, Ptr{Float64}),
+      output = ccall(fn, Float64, (Ptr{Void}, Ptr{FeatureNode}, Ptr{Float64}),
           model.ptr, nodeptrs[i], pointer(decvalues, nlabels*(i-1)+1))
-      class[i] = model.labels[int(output)]
+      class[i] = model.labels[round(Int,output)]
   end
 end
 
