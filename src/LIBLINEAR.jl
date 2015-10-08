@@ -224,7 +224,7 @@ say("=2")
       instances, weights)
 
   param = Array(Parameter, 1)
-  param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p), init_sol)
+  param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p, init_sol)
 say("=3")
 say(param[1])
   # construct problem
