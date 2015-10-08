@@ -210,7 +210,7 @@ function linear_train{T, U<:Real}(
           )
 
   global verbosity
-say("=1")
+
   # set eps
   eps = solver_type == L2R_LR || solver_type == L2R_L2LOSS_SVC ||
         solver_type == L1R_L2LOSS_SVC || solver_type == L1R_LR ? 0.01 :
@@ -218,23 +218,20 @@ say("=1")
         solver_type == L2R_L2LOSS_SVC_DUAL || solver_type == L2R_L1LOSS_SVC_DUAL ||
         solver_type == MCSVM_CS || solver_type == L2R_LR_DUAL ||
         solver_type == L2R_L2LOSS_SVR_DUAL || solver_type == L2R_L1LOSS_SVR_DUAL ? 0.1 : 0.001
-say("=2")
+
   # construct nr_weight, weight_label, weight
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
   param = Array(Parameter, 1)
   param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p, init_sol)
-say("=3")
+
 say(param[1])
   # construct problem
   (nodes, nodeptrs) = instances2nodes(instances)
-say("- nodes:")
-#say(nodes)
-say("- nodeptrs:")
-#say(nodeptrs)
+
   problem = Problem[Problem(Cint(size(instances, 2)), Cint(size(instances, 1)), pointer(idx), pointer(nodeptrs), bias)]
-say("=4")
+
 say(problem[1])
   verbosity = verbose
 
@@ -243,10 +240,9 @@ say(problem[1])
   if chk != C_NULL
     println("check parameter: $(bytestring(chk))")
   end
-#return chk
-say("=4.5")
+
   ptr = ccall(train(), Ptr{Void}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
-say("=5")
+
   model = Model(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, size(instances, 1), bias, verbose)
   finalizer(model, linear_free)
   model
