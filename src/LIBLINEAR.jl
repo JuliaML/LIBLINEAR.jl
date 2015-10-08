@@ -1,7 +1,5 @@
 module LIBLINEAR
 
-# package code goes here
-
 export linear_train, linear_predict
 
 # debug
@@ -47,7 +45,7 @@ immutable Parameter
   weight::Ptr{Float64}
   p::Float64
   # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
-  #init_sol::Union{Ptr{Float64},Ptr{Void}}
+  init_sol::Ptr{Float64}
 end
 
 # model
@@ -205,7 +203,7 @@ function linear_train{T, U<:Real}(
           C::Float64=1.0,
           p::Float64=0.1,
           # Initial-solution specification supported for solver L2R_LR and L2R_L2LOSS_SVC
-          init_sol::Union{Ptr{Float64}, Ptr{Void}}=C_NULL,
+          init_sol::Ptr{Float64}=convert(Ptr{Float64}, C_NULL),
           # problem parameter
           bias::Float64=-1.0,
           verbose::Bool=false
@@ -219,30 +217,14 @@ say("=1")
         solver_type == L2R_L2LOSS_SVR ? 0.001 :
         solver_type == L2R_L2LOSS_SVC_DUAL || solver_type == L2R_L1LOSS_SVC_DUAL ||
         solver_type == MCSVM_CS || solver_type == L2R_LR_DUAL ||
-        solver_type == L2R_L2LOSS_SVR_DUAL || solver_type == L2R_L1LOSS_SVR_DUAL ? 0.1 :0.001
+        solver_type == L2R_L2LOSS_SVR_DUAL || solver_type == L2R_L1LOSS_SVR_DUAL ? 0.1 : 0.001
 say("=2")
   # construct nr_weight, weight_label, weight
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
-# say("- labels:")
-# #say(length(labels))
-# #say(labels)
-# say("- instances:")
-# #say(size(instances))
-# #say(instances)
-# say("- idx:")
-# #say(length(idx))
-# #say(idx)
-# say("- reverse_labels:")
-# #say(reverse_labels)
-# say("- weights:")
-# #say(weights)
-# say("- weight_labels:")
-# #say(weight_labels)
-
   param = Array(Parameter, 1)
-  param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p)#, init_sol)
+  param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p), init_sol)
 say("=3")
 say(param[1])
   # construct problem
