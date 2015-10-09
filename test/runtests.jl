@@ -15,7 +15,7 @@ instances = convert(Array,iris[:, 1:4])'
 
 # Train model on half of the data using default parameters. See the linear_train
 # function in LIBLINEAR.jl for optional parameter settings.
-model = linear_train(labels[1:2:end], instances[:, 1:2:end]);
+model = linear_train(labels[1:2:end], instances[:, 1:2:end], verbose=true);
 
 # Test model on the other half of the data.
 (predicted_labels, decision_values) = linear_predict(model, instances[:, 2:2:end]);
