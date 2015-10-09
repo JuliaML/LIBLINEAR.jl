@@ -7,7 +7,7 @@ function say(sth)
   println(sth)
 end
 
-# enums
+# solver enums
 const L2R_LR = Cint(0)
 const L2R_L2LOSS_SVC_DUAL = Cint(1)
 const L2R_L2LOSS_SVC = Cint(2)
@@ -20,7 +20,7 @@ const L2R_L2LOSS_SVR  = Cint(11)
 const L2R_L2LOSS_SVR_DUAL = Cint(12)
 const L2R_L1LOSS_SVR_DUAL = Cint(13)
 
-verbosity = true
+verbosity = false
 
 immutable FeatureNode
   index::Cint
@@ -48,9 +48,18 @@ immutable Parameter
   init_sol::Ptr{Float64}
 end
 
-# model
-type Model{T}
-  ptr::Ptr{Void}
+immutable Model
+  param::Parameter
+  nr_class::Cint # number of class
+  nr_feature::Cint
+  w::Ptr{Float64}
+  label::Ptr{Cint} # label of each class
+  bias::Float64
+end
+
+# model in julia
+type LINEARModel{T}
+  ptr::Ptr{Model} # ptr to Model in C
   param::Vector{Parameter}
 
   # prevent these from being garbage collected
@@ -66,7 +75,7 @@ type Model{T}
   verbose::Bool
 end
 
-# set print function
+# get library
 let liblinear=C_NULL
   global get_liblinear
   function get_liblinear()
@@ -85,7 +94,7 @@ function linear_print(str::Ptr{UInt8})
     nothing
 end
 
-# cache the function handle
+# cache the function symbols
 macro cachedsym(symname)
     cached = gensym()
     quote
@@ -102,7 +111,7 @@ end
 @cachedsym free_model_content
 @cachedsym check_parameter
 
-# helper indices_and_weights' helper
+# helper, used in indices_and_weights
 function grp2idx{T, S <: Real}(::Type{S}, labels::AbstractVector,
     label_dict::Dict{T, Cint}, reverse_labels::Vector{T})
 
@@ -191,9 +200,8 @@ function instances2nodes{U<:Real}(instances::SparseMatrixCSC{U})
 end
 
 # train
-# - instances: instances are colums
+# note: instances are in colums
 function linear_train{T, U<:Real}(
-          # labels & data
           labels::AbstractVector{T},
           instances::AbstractMatrix{U};
           # default parameters
@@ -202,16 +210,15 @@ function linear_train{T, U<:Real}(
           eps::Float64=Inf,
           C::Float64=1.0,
           p::Float64=0.1,
-          # Initial-solution specification supported for solver L2R_LR and L2R_L2LOSS_SVC
+          # initial solutions for solvers L2R_LR, L2R_L2LOSS_SVC
           init_sol::Ptr{Float64}=convert(Ptr{Float64}, C_NULL),
-          # problem parameter
           bias::Float64=-1.0,
           verbose::Bool=false
           )
 
   global verbosity
+  verbosity = verbose
 
-  # set eps
   eps = solver_type == L2R_LR || solver_type == L2R_L2LOSS_SVC ||
         solver_type == L1R_L2LOSS_SVC || solver_type == L1R_LR ? 0.01 :
         solver_type == L2R_L2LOSS_SVR ? 0.001 :
@@ -219,42 +226,38 @@ function linear_train{T, U<:Real}(
         solver_type == MCSVM_CS || solver_type == L2R_LR_DUAL ||
         solver_type == L2R_L2LOSS_SVR_DUAL || solver_type == L2R_L1LOSS_SVR_DUAL ? 0.1 : 0.001
 
-  # construct nr_weight, weight_label, weight
+  # construct parameter
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
   param = Array(Parameter, 1)
   param[1] = Parameter(solver_type, eps, C, Cint(length(weights)), pointer(weight_labels), pointer(weights), p, init_sol)
 
-say(param[1])
   # construct problem
   (nodes, nodeptrs) = instances2nodes(instances)
 
   problem = Problem[Problem(Cint(size(instances, 2)), Cint(size(instances, 1)), pointer(idx), pointer(nodeptrs), bias)]
 
-say(problem[1])
-  verbosity = verbose
-
   chk = ccall(check_parameter(), Ptr{UInt8}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
 
-  if chk != C_NULL
-    println("check parameter: $(bytestring(chk))")
+  if chk != convert(Ptr{UInt8}, C_NULL)
+    error("Please check your parameters: $(bytestring(chk))")
   end
 
-  ptr = ccall(train(), Ptr{Void}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
+  ptr = ccall(train(), Ptr{Model}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
 
-  model = Model(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, size(instances, 1), bias, verbose)
+  model = LINEARModel(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, size(instances, 1), bias, verbose)
   finalizer(model, linear_free)
   model
 end
 
 # helper
-linear_free(model::Model) = ccall(free_model_content(), Void, (Ptr{Void},), model.ptr)
+linear_free(model::LINEARModel) = ccall(free_model_content(), Void, (Ptr{Model},), model.ptr)
 
 # predict
-# - instances: instances are colums
+# note: instances are in colums
 function linear_predict{T, U<:Real}(
-          model::Model{T},
+          model::LINEARModel{T},
           instances::AbstractMatrix{U};
           probability_estimates::Bool=false)
   global verbosity

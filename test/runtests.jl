@@ -1,27 +1,20 @@
 using LIBLINEAR
 using Base.Test
 
-# write your own tests here
-@test 1 == 1
-
-# minimum call lib functions
-
-
 
 using RDatasets
 
 # Load Fisher's classic iris data
 iris = dataset("datasets", "iris")
 
-# LIBSVM handles multi-class data automatically using a one-against-one strategy
+# LIBLINEAR handles multi-class data automatically using a one-against-one strategy
 labels = iris[:Species]
 
 # First dimension of input data is features; second is instances
 instances = convert(Array,iris[:, 1:4])'
 
-# Train SVM on half of the data using default parameters. See the svmtrain
-# function in LIBSVM.jl for optional parameter settings.
-# model = train(ones(length(labels[1:2:end])), instances[:, 1:2:end]);
+# Train model on half of the data using default parameters. See the linear_train
+# function in LIBLINEAR.jl for optional parameter settings.
 model = linear_train(labels[1:2:end], instances[:, 1:2:end]);
 
 # Test model on the other half of the data.
