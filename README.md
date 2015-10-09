@@ -29,4 +29,4 @@ model = linear_train(labels[1:2:end], instances[:, 1:2:end], verbose=true);
 ```
 ## Notes
 
-This package uses of the [LIBSVM](https://github.com/simonster/LIBSVM.jl) Julia package by Simon Kornblith as a reference when coding.
+This package is adpaped from the [LIBSVM](https://github.com/simonster/LIBSVM.jl) Julia package by Simon Kornblith.
