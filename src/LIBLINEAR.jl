@@ -205,7 +205,7 @@ function instances2nodes{U<:Real}(instances::SparseMatrixCSC{U})
 end
 
 # train
-# note: instances are in colums
+# note: instances are in columns
 function linear_train{T, U<:Real}(
           labels::AbstractVector{T},
           instances::AbstractMatrix{U};
@@ -260,7 +260,7 @@ end
 linear_free(model::LINEARModel) = ccall(free_model_content(), Void, (Ptr{Model},), model.ptr)
 
 # predict
-# note: instances are in colums
+# note: instances are in columns
 function linear_predict{T, U<:Real}(
           model::LINEARModel{T},
           instances::AbstractMatrix{U};

@@ -27,6 +27,8 @@ model = linear_train(labels[1:2:end], instances[:, 1:2:end], verbose=true);
 @printf "Accuracy: %.2f%%\n" mean((predicted_labels .== labels[2:2:end]))*100
 
 ```
-## Notes
+## Credits
 
-This package is adpaped from the [LIBSVM](https://github.com/simonster/LIBSVM.jl) Julia package by Simon Kornblith.
+Created by Zhizhong Li.
+
+This package is adapted from the [LIBSVM](https://github.com/simonster/LIBSVM.jl) Julia package by Simon Kornblith.
