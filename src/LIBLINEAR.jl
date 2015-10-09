@@ -150,7 +150,7 @@ function indices_and_weights{T, U<:Real}(labels::AbstractVector{T},
     else
         weight_labels = grp2idx(Cint, keys(weights), label_dict,
             reverse_labels)
-        weights = float64(values(weights))
+        weights = Float64(values(weights))
     end
 
     (idx, reverse_labels, weights, weight_labels)
@@ -188,7 +188,7 @@ function instances2nodes{U<:Real}(instances::SparseMatrixCSC{U})
         nodeptrs[i] = pointer(nodes, k)
         while j < instances.colptr[i+1]
             val = instances.nzval[j]
-            nodes[k] = FeatureNode(Cint(instances.rowval[j]), float64(val))
+            nodes[k] = FeatureNode(Cint(instances.rowval[j]), Float64(val))
             k += 1
             j += 1
         end
