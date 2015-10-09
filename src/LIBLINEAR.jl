@@ -75,6 +75,11 @@ type LINEARModel{T}
   verbose::Bool
 end
 
+# LINEARModel to Model
+function get_model(linear_model::LINEARModel)
+  pointer_to_array(linear_model.ptr, 1)[1]
+end
+
 # get library
 let liblinear=C_NULL
   global get_liblinear
