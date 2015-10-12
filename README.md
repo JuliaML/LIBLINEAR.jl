@@ -10,7 +10,7 @@ using RDatasets
 # Load Fisher's classic iris data
 iris = dataset("datasets", "iris")
 
-# LIBLINEAR handles multi-class data automatically using a one-against-one strategy
+# LIBLINEAR handles multi-class data automatically using a one-against-the rest strategy
 labels = iris[:Species]
 
 # First dimension of input data is features; second is instances
