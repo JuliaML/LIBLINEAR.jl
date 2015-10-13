@@ -72,6 +72,8 @@ type LINEARModel{T}
   weights::Vector{Float64}
   nfeatures::Int
   bias::Float64
+  w::Vector{Float64}
+  nclasses::Int
   verbose::Bool
 end
 
@@ -232,6 +234,12 @@ function linear_train{T, U<:Real}(
         solver_type == L2R_L2LOSS_SVR_DUAL || solver_type == L2R_L1LOSS_SVR_DUAL ? 0.1 : 0.001
 
   # construct parameter
+  # if bias >= o, then one additional feature is added to the end of each instance.
+  nfeatures = size(instances, 1)
+  if bias > 0
+    instances = [instances; fill(bias, 1, size(instances, 2))]
+  end
+
   (idx, reverse_labels, weights, weight_labels) = indices_and_weights(labels,
       instances, weights)
 
@@ -251,7 +259,9 @@ function linear_train{T, U<:Real}(
 
   ptr = ccall(train(), Ptr{Model}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
 
-  model = LINEARModel(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, size(instances, 1), bias, verbose)
+  m = pointer_to_array(ptr, 1)[1]
+  w = pointer_to_array(m.w, m.nr_feature + (bias >= 0 ? 1 : 0))
+  model = LINEARModel(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, nfeatures, bias, w, Int(m.nr_class), verbose)
   finalizer(model, linear_free)
   model
 end
