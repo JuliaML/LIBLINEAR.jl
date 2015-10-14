@@ -214,15 +214,18 @@ function linear_train{T, U<:Real}(
           # default parameters
           weights::Union{Dict{T, Float64}, Void}=nothing,
           solver_type::Cint=L2R_L2LOSS_SVC_DUAL,
-          eps::Float64=Inf,
-          C::Float64=1.0,
-          p::Float64=0.1,
+          eps::Real=Inf,
+          C::Real=1.0,
+          p::Real=0.1,
           # initial solutions for solvers L2R_LR, L2R_L2LOSS_SVC
           init_sol::Ptr{Float64}=convert(Ptr{Float64}, C_NULL),
-          bias::Float64=-1.0,
+          bias::Real=-1.0,
           verbose::Bool=false
           )
-
+  eps = Float64(eps)
+  C = Float64(C)
+  p = Float64(p)
+  bias = Float64(bias)
   global verbosity
   verbosity = verbose
 
