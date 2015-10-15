@@ -239,7 +239,7 @@ function linear_train{T, U<:Real}(
   # construct parameter
   # if bias >= o, then one additional feature is added to the end of each instance.
   nfeatures = size(instances, 1)
-  if bias > 0
+  if bias >= 0
     instances = [instances; fill(bias, 1, size(instances, 2))]
   end
 
