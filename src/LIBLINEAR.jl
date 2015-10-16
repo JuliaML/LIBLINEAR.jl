@@ -76,7 +76,7 @@ type LINEARModel{T}
   weights::Vector{Float64}
   nfeatures::Int
   bias::Float64
-  w::Vector{Float64}
+  w::Array{Float64}
   nclasses::Int
   verbose::Bool
 end
@@ -211,7 +211,6 @@ function instances2nodes{U<:Real}(instances::SparseMatrixCSC{U})
 end
 
 # train
-# note: instances are in columns
 function linear_train{T, U<:Real}(
           labels::AbstractVector{T},
           instances::AbstractMatrix{U};
@@ -240,9 +239,9 @@ function linear_train{T, U<:Real}(
         solver_type == MCSVM_CS || solver_type == L2R_LR_DUAL ||
         solver_type == L2R_L2LOSS_SVR_DUAL || solver_type == L2R_L1LOSS_SVR_DUAL ? 0.1 : 0.001
 
-  # construct parameter
-  # if bias >= o, then one additional feature is added to the end of each instance.
+  # instances are in columns
   nfeatures = size(instances, 1)
+  # if bias >= o, then one additional feature is added to the end of each instance.
   if bias >= 0
     instances = [instances; fill(bias, 1, size(instances, 2))]
   end
@@ -267,7 +266,11 @@ function linear_train{T, U<:Real}(
   ptr = ccall(train(), Ptr{Model}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
 
   m = pointer_to_array(ptr, 1)[1]
-  w = pointer_to_array(m.w, m.nr_feature + (bias >= 0 ? 1 : 0))
+  w_dim = Int(m.nr_feature + (bias >= 0 ? 1 : 0))
+  w_number = Int(m.nr_class == 2 && solver_type != MCSVM_CS ? 1 : m.nr_class)
+
+  w = pointer_to_array(m.w, w_dim*w_number)
+  w = reshape(w, w_dim, w_number)
   model = LINEARModel(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, nfeatures, bias, w, Int(m.nr_class), verbose)
   finalizer(model, linear_free)
   model
@@ -277,16 +280,20 @@ end
 linear_free(model::LINEARModel) = ccall(free_model_content(), Void, (Ptr{Model},), model.ptr)
 
 # predict
-# note: instances are in columns
 function linear_predict{T, U<:Real}(
           model::LINEARModel{T},
           instances::AbstractMatrix{U};
           probability_estimates::Bool=false)
   global verbosity
+  # instances are in columns
   ninstances = size(instances, 2)
 
   if size(instances, 1) != model.nfeatures
-      error("Model has $(model.nfeatures) but $(size(instances, 1)) provided")
+      error("Model has $(model.nfeatures) features but $(size(instances, 1)) provided (instances are in columns)")
+  end
+
+  if model.bias >= 0
+    instances = [instances; fill(model.bias, 1, ninstances)]
   end
 
   (nodes, nodeptrs) = instances2nodes(instances)
