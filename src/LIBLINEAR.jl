@@ -74,10 +74,11 @@ type LINEARModel{T}
   labels::Vector{T}
   weight_labels::Vector{Cint}
   weights::Vector{Float64}
-  nfeatures::Int
+  nr_feature::Int
   bias::Float64
   w::Array{Float64}
-  nclasses::Int
+  nr_class::Int
+  solver_type::Cint
   verbose::Bool
 end
 
@@ -270,8 +271,8 @@ function linear_train{T, U<:Real}(
   w_number = Int(m.nr_class == 2 && solver_type != MCSVM_CS ? 1 : m.nr_class)
 
   w = pointer_to_array(m.w, w_dim*w_number)
-  w = reshape(w, w_dim, w_number)
-  model = LINEARModel(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, nfeatures, bias, w, Int(m.nr_class), verbose)
+  w = reshape(w, w_number, w_dim)'
+  model = LINEARModel(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, nfeatures, bias, w, Int(m.nr_class), solver_type, verbose)
   finalizer(model, linear_free)
   model
 end
@@ -288,8 +289,8 @@ function linear_predict{T, U<:Real}(
   # instances are in columns
   ninstances = size(instances, 2)
 
-  if size(instances, 1) != model.nfeatures
-      error("Model has $(model.nfeatures) features but $(size(instances, 1)) provided (instances are in columns)")
+  if size(instances, 1) != model.nr_feature
+      error("Model has $(model.nr_feature) features but $(size(instances, 1)) provided (instances are in columns)")
   end
 
   if model.bias >= 0
@@ -298,14 +299,14 @@ function linear_predict{T, U<:Real}(
 
   (nodes, nodeptrs) = instances2nodes(instances)
   class = Array(T, ninstances)
-  nlabels = length(model.labels)
-  decvalues = Array(Float64, nlabels, ninstances)
+  w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ? 1 : model.nr_class)
+  decvalues = Array(Float64, w_number, ninstances)
   verbosity = model.verbose
   fn = probability_estimates ? predict_probability() :
       predict_values()
   for i = 1:ninstances
       output = ccall(fn, Float64, (Ptr{Void}, Ptr{FeatureNode}, Ptr{Float64}),
-          model.ptr, nodeptrs[i], pointer(decvalues, nlabels*(i-1)+1))
+          model.ptr, nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
       class[i] = model.labels[round(Int,output)]
   end
 
