@@ -25,6 +25,7 @@ const L2R_L2LOSS_SVR_DUAL = Cint(12)
 const L2R_L1LOSS_SVR_DUAL = Cint(13)
 
 verbosity = false
+win = OS_NAME == :Windows
 
 immutable FeatureNode
   index::Cint
@@ -92,7 +93,9 @@ let liblinear=C_NULL
   global get_liblinear
   function get_liblinear()
     if liblinear == C_NULL
-      liblinear = Libdl.dlopen(joinpath(Pkg.dir(), "LIBLINEAR", "deps", "liblinear.so.3"))
+      libfile = win ? joinpath(Pkg.dir(), "LIBLINEAR", "deps","liblinear.dll") :
+        joinpath(Pkg.dir(), "LIBLINEAR", "deps", "liblinear.so.3")
+      liblinear = Libdl.dlopen(libfile)
       ccall(Libdl.dlsym(liblinear, :set_print_string_function), Void, (Ptr{Void},), cfunction(linear_print, Void, (Ptr{UInt8},)))
     end
     liblinear
