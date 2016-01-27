@@ -1,15 +1,13 @@
 module LIBLINEAR
 
-export linear_train, linear_predict,
+export 
+    LinearModel,
+    linear_train, 
+    linear_predict,
     L2R_LR, L2R_L2LOSS_SVC_DUAL, L2R_L2LOSS_SVC_DUAL,
     L2R_L1LOSS_SVC_DUAL, MCSVM_CS, L1R_L2LOSS_SVC,
     L1R_LR, L2R_LR_DUAL, L2R_L2LOSS_SVR,
     L2R_L2LOSS_SVR_DUAL, L2R_L1LOSS_SVR_DUAL
-
-# debug
-function say(sth)
-  println(sth)
-end
 
 # solver enums
 const L2R_LR = Cint(0)
@@ -25,7 +23,6 @@ const L2R_L2LOSS_SVR_DUAL = Cint(12)
 const L2R_L1LOSS_SVR_DUAL = Cint(13)
 
 verbosity = false
-win = OS_NAME == :Windows
 
 immutable FeatureNode
   index::Cint
@@ -42,15 +39,13 @@ end
 
 immutable Parameter
   solver_type::Cint
-
   eps::Float64
   C::Float64
   nr_weight::Cint
   weight_label::Ptr{Cint}
   weight::Ptr{Float64}
   p::Float64
-  # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
-  init_sol::Ptr{Float64}
+  init_sol::Ptr{Float64} # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
 end
 
 immutable Model
@@ -63,29 +58,14 @@ immutable Model
 end
 
 # model in julia
-type LINEARModel{T}
-  ptr::Ptr{Model} # ptr to Model in C
-  param::Vector{Parameter}
-
-  # prevent these from being garbage collected
-  problem::Vector{Problem}
-  nodes::Array{FeatureNode}
-  nodeptr::Vector{Ptr{FeatureNode}}
-
-  labels::Vector{T}
-  weight_labels::Vector{Cint}
-  weights::Vector{Float64}
-  nr_feature::Int
-  bias::Float64
-  w::Array{Float64}
-  nr_class::Int
+type LinearModel{T}
   solver_type::Cint
-  verbose::Bool
-end
-
-# LINEARModel to Model
-function get_model(linear_model::LINEARModel)
-  pointer_to_array(linear_model.ptr, 1)[1]
+  nr_class::Int
+  nr_feature::Int
+  w::Vector{Float64}
+  _labels::Vector{Cint}
+  labels::Vector{T}
+  bias::Float64
 end
 
 # get library
@@ -93,7 +73,7 @@ let liblinear=C_NULL
   global get_liblinear
   function get_liblinear()
     if liblinear == C_NULL
-      libfile = win ? joinpath(Pkg.dir(), "LIBLINEAR", "deps","liblinear.dll") :
+      libfile = OS_NAME == :Windows ? joinpath(Pkg.dir(), "LIBLINEAR", "deps","liblinear$(WORD_SIZE).dll") : 
         joinpath(Pkg.dir(), "LIBLINEAR", "deps", "liblinear.so.3")
       liblinear = Libdl.dlopen(libfile)
       ccall(Libdl.dlsym(liblinear, :set_print_string_function), Void, (Ptr{Void},), cfunction(linear_print, Void, (Ptr{UInt8},)))
@@ -102,6 +82,7 @@ let liblinear=C_NULL
   end
 end
 
+# helper
 function linear_print(str::Ptr{UInt8})
     if verbosity::Bool
         print(bytestring(str))
@@ -109,7 +90,6 @@ function linear_print(str::Ptr{UInt8})
     nothing
 end
 
-# cache the function symbols
 macro cachedsym(symname)
     cached = gensym()
     quote
@@ -268,27 +248,26 @@ function linear_train{T, U<:Real}(
   end
 
   ptr = ccall(train(), Ptr{Model}, (Ptr{Problem}, Ptr{Parameter}), problem, param)
-
   m = pointer_to_array(ptr, 1)[1]
+  # extract w & _labels, notice they become safe after [:] operation
   w_dim = Int(m.nr_feature + (bias >= 0 ? 1 : 0))
   w_number = Int(m.nr_class == 2 && solver_type != MCSVM_CS ? 1 : m.nr_class)
-
-  w = pointer_to_array(m.w, w_dim*w_number)
-  w = reshape(w, w_number, w_dim)'
-  model = LINEARModel(ptr, param, problem, nodes, nodeptrs, reverse_labels, weight_labels, weights, nfeatures, bias, w, Int(m.nr_class), solver_type, verbose)
-  finalizer(model, linear_free)
+  w = pointer_to_array(m.w, w_dim*w_number)[:]
+  _labels = pointer_to_array(m.label, m.nr_class)[:]
+  model = LinearModel(solver_type, Int(m.nr_class), Int(m.nr_feature), w, _labels, reverse_labels, m.bias)
+  ccall(free_model_content(), Void, (Ptr{Model},), ptr)
+  
   model
 end
 
-# helper
-linear_free(model::LINEARModel) = ccall(free_model_content(), Void, (Ptr{Model},), model.ptr)
-
 # predict
 function linear_predict{T, U<:Real}(
-          model::LINEARModel{T},
+          model::LinearModel{T},
           instances::AbstractMatrix{U};
-          probability_estimates::Bool=false)
+          probability_estimates::Bool=false,
+          verbose::Bool=false)
   global verbosity
+  verbosity = verbose
   # instances are in columns
   ninstances = size(instances, 2)
 
@@ -299,17 +278,20 @@ function linear_predict{T, U<:Real}(
   if model.bias >= 0
     instances = [instances; fill(model.bias, 1, ninstances)]
   end
+  
+  m = Array(Model, 1)
+  m[1] = Model(Parameter(model.solver_type, .0, .0, Cint(0), convert(Ptr{Cint}, C_NULL), convert(Ptr{Float64}, C_NULL), .0, convert(Ptr{Float64}, C_NULL)),
+        model.nr_class, model.nr_feature, pointer(model.w), pointer(model._labels), model.bias)
 
   (nodes, nodeptrs) = instances2nodes(instances)
   class = Array(T, ninstances)
   w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ? 1 : model.nr_class)
   decvalues = Array(Float64, w_number, ninstances)
-  verbosity = model.verbose
   fn = probability_estimates ? predict_probability() :
       predict_values()
   for i = 1:ninstances
       output = ccall(fn, Float64, (Ptr{Void}, Ptr{FeatureNode}, Ptr{Float64}),
-          model.ptr, nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
+          pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
       class[i] = model.labels[round(Int,output)]
   end
 
