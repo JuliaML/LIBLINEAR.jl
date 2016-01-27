@@ -1,6 +1,7 @@
 # LIBLINEAR
 
 [![Build Status](https://travis-ci.org/innerlee/LIBLINEAR.jl.svg?branch=master)](https://travis-ci.org/innerlee/LIBLINEAR.jl)
+[![Build status](https://ci.appveyor.com/api/projects/status/x9jq6w5mji1u6eff?svg=true)](https://ci.appveyor.com/project/innerlee/liblinear-jl)
 
 Julia bindings for [LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/liblinear/).
 
