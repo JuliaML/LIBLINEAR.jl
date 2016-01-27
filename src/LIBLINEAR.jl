@@ -73,7 +73,7 @@ let liblinear=C_NULL
   global get_liblinear
   function get_liblinear()
     if liblinear == C_NULL
-      libfile = OS_NAME == :Windows ? joinpath(Pkg.dir(), "LIBLINEAR", "deps","liblinear$(WORD_SIZE).dll")) :
+      libfile = OS_NAME == :Windows ? joinpath(Pkg.dir(), "LIBLINEAR", "deps","liblinear$(WORD_SIZE).dll") : 
         joinpath(Pkg.dir(), "LIBLINEAR", "deps", "liblinear.so.3")
       liblinear = Libdl.dlopen(libfile)
       ccall(Libdl.dlsym(liblinear, :set_print_string_function), Void, (Ptr{Void},), cfunction(linear_print, Void, (Ptr{UInt8},)))
@@ -254,7 +254,7 @@ function linear_train{T, U<:Real}(
   w_number = Int(m.nr_class == 2 && solver_type != MCSVM_CS ? 1 : m.nr_class)
   w = pointer_to_array(m.w, w_dim*w_number)[:]
   _labels = pointer_to_array(m.label, m.nr_class)[:]
-  model = LinearModel(solver_type, m.nr_class, m.nr_feature, w, reverse_labels, _labels, m.bias)
+  model = LinearModel(solver_type, Int(m.nr_class), Int(m.nr_feature), w, _labels, reverse_labels, m.bias)
   ccall(free_model_content(), Void, (Ptr{Model},), ptr)
   
   model
@@ -264,8 +264,10 @@ end
 function linear_predict{T, U<:Real}(
           model::LinearModel{T},
           instances::AbstractMatrix{U};
-          probability_estimates::Bool=false)
+          probability_estimates::Bool=false,
+          verbose::Bool=false)
   global verbosity
+  verbosity = verbose
   # instances are in columns
   ninstances = size(instances, 2)
 
@@ -285,7 +287,6 @@ function linear_predict{T, U<:Real}(
   class = Array(T, ninstances)
   w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ? 1 : model.nr_class)
   decvalues = Array(Float64, w_number, ninstances)
-  verbosity = model.verbose
   fn = probability_estimates ? predict_probability() :
       predict_values()
   for i = 1:ninstances
