@@ -83,7 +83,12 @@ let liblinear = C_NULL
 end
 
 # helper
-linear_print(str::Ptr{UInt8}) = verbosity && print(unsafe_string(str))
+function linear_print(str::Ptr{UInt8})
+    if verbosity
+        print(unsafe_string(str))
+    end
+    nothing
+end
 
 macro cachedsym(symname)
     cached = gensym()
