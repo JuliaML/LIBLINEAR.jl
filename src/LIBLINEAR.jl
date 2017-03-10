@@ -69,7 +69,7 @@ let liblinear = C_NULL
     global get_liblinear
     function get_liblinear()
         if liblinear == C_NULL
-            libpath = joinpath(Pkg.dir(), "LIBLINEAR", "deps")
+            libpath = joinpath(dirname(@__FILE__), "..", "deps")
             libfile = is_windows() ?
                 joinpath(libpath, "liblinear$(Sys.WORD_SIZE).dll") :
                 joinpath(libpath, "liblinear.so.3")
