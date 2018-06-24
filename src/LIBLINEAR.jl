@@ -21,12 +21,12 @@ const L2R_L1LOSS_SVR_DUAL   =   Cint(13)
 
 verbosity = false
 
-immutable FeatureNode
+struct FeatureNode
     index           ::  Cint
     value           ::  Float64
 end
 
-immutable Problem
+struct Problem
     l               ::  Cint                    # num of instances
     n               ::  Cint                    # num of features, including bias feature if bias >= 0
     y               ::  Ptr{Float64}            # target values
@@ -34,7 +34,7 @@ immutable Problem
     bias            ::  Float64                 # if bias >= 0, isntance x becomes [x; bias]; if < 0, no bias term (default -1)
 end
 
-immutable Parameter
+struct Parameter
     solver_type     ::  Cint
     eps             ::  Float64
     C               ::  Float64
@@ -45,7 +45,7 @@ immutable Parameter
     init_sol        ::  Ptr{Float64}            # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
 end
 
-immutable Model
+struct Model
     param           ::  Parameter
     nr_class        ::  Cint                    # number of class
     nr_feature      ::  Cint
@@ -55,7 +55,7 @@ immutable Model
 end
 
 # model in julia
-type LinearModel{T}
+mutable struct LinearModel{T}
   solver_type       ::  Cint
   nr_class          ::  Int
   nr_feature        ::  Int
@@ -109,8 +109,8 @@ end
 @cachedsym check_parameter
 
 # helper
-function grp2idx{T, S <: Real}(::Type{S}, labels::AbstractVector,
-    label_dict::Dict{T, Cint}, reverse_labels::Vector{T})
+function grp2idx(::Type{S}, labels::AbstractVector,
+    label_dict::Dict{T, Cint}, reverse_labels::Vector{T}) where {T, S <: Real}
 
     idx = Array{S}(length(labels))
     nextkey = length(reverse_labels) + 1
@@ -126,11 +126,11 @@ function grp2idx{T, S <: Real}(::Type{S}, labels::AbstractVector,
 end
 
 # helper
-function indices_and_weights{T, U<:Real}(
+function indices_and_weights(
             labels      ::  AbstractVector{T},
             instances   ::  AbstractMatrix{U},
             weights     ::  Union{Dict{T, Float64}, Void}=nothing
-            )
+            ) where {T, U<:Real}
     label_dict = Dict{T, Cint}()
     reverse_labels = Array{T}(0)
     idx = grp2idx(Float64, labels, label_dict, reverse_labels)
@@ -154,7 +154,7 @@ function indices_and_weights{T, U<:Real}(
 end
 
 # helper
-function instances2nodes{U<:Real}(instances::AbstractMatrix{U})
+function instances2nodes(instances::AbstractMatrix{U}) where U<:Real
     nfeatures  = size(instances, 1)
     ninstances = size(instances, 2)
     nodeptrs   = Array{Ptr{FeatureNode}}(ninstances)
@@ -174,7 +174,7 @@ function instances2nodes{U<:Real}(instances::AbstractMatrix{U})
 end
 
 # helper
-function instances2nodes{U<:Real}(instances::SparseMatrixCSC{U})
+function instances2nodes(instances::SparseMatrixCSC{U}) where U<:Real
     ninstances = size(instances, 2)
     nodeptrs   = Array{Ptr{FeatureNode}}(ninstances)
     nodes      = Array{FeatureNode}(nnz(instances) + ninstances)
@@ -197,7 +197,7 @@ function instances2nodes{U<:Real}(instances::SparseMatrixCSC{U})
 end
 
 # train
-function linear_train{T, U<:Real}(
+function linear_train(
             labels          ::  AbstractVector{T},
             instances       ::  AbstractMatrix{U};
             # optional parameters
@@ -209,7 +209,7 @@ function linear_train{T, U<:Real}(
             init_sol        ::  Ptr{Float64}=convert(Ptr{Float64}, C_NULL), # initial solutions for solvers L2R_LR, L2R_L2LOSS_SVC
             bias            ::  Real=-1.0,
             verbose         ::  Bool=false
-            )
+            ) where {T, U<:Real}
     global verbosity
     verbosity = verbose
     eps, C, p, bias = map(Float64, (eps, C, p, bias))
@@ -270,11 +270,11 @@ function linear_train{T, U<:Real}(
 end
 
 # predict
-function linear_predict{T, U<:Real}(
+function linear_predict(
             model                   ::  LinearModel{T},
             instances               ::  AbstractMatrix{U};
             probability_estimates   ::  Bool=false,
-            verbose                 ::  Bool=false)
+            verbose                 ::  Bool=false) where {T, U<:Real}
     global verbosity
     verbosity  = verbose
     ninstances = size(instances, 2) # instances are in columns
