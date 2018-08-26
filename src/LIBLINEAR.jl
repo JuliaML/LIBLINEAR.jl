@@ -1,86 +1,71 @@
 __precompile__(true)
 module LIBLINEAR
 
+using SparseArrays
+using Libdl
+
 export
     LinearModel,
     linear_train,
     linear_predict
 
 # solver enums
-const L2R_LR                =   Cint(0)
-const L2R_L2LOSS_SVC_DUAL   =   Cint(1)
-const L2R_L2LOSS_SVC        =   Cint(2)
-const L2R_L1LOSS_SVC_DUAL   =   Cint(3)
-const MCSVM_CS              =   Cint(4)
-const L1R_L2LOSS_SVC        =   Cint(5)
-const L1R_LR                =   Cint(6)
-const L2R_LR_DUAL           =   Cint(7)
-const L2R_L2LOSS_SVR        =   Cint(11)
-const L2R_L2LOSS_SVR_DUAL   =   Cint(12)
-const L2R_L1LOSS_SVR_DUAL   =   Cint(13)
+const L2R_LR              = Cint(0)
+const L2R_L2LOSS_SVC_DUAL = Cint(1)
+const L2R_L2LOSS_SVC      = Cint(2)
+const L2R_L1LOSS_SVC_DUAL = Cint(3)
+const MCSVM_CS            = Cint(4)
+const L1R_L2LOSS_SVC      = Cint(5)
+const L1R_LR              = Cint(6)
+const L2R_LR_DUAL         = Cint(7)
+const L2R_L2LOSS_SVR      = Cint(11)
+const L2R_L2LOSS_SVR_DUAL = Cint(12)
+const L2R_L1LOSS_SVR_DUAL = Cint(13)
 
 verbosity = false
 
 struct FeatureNode
-    index           ::  Cint
-    value           ::  Float64
+    index         :: Cint
+    value         :: Float64
 end
 
 struct Problem
-    l               ::  Cint                    # num of instances
-    n               ::  Cint                    # num of features, including bias feature if bias >= 0
-    y               ::  Ptr{Float64}            # target values
-    x               ::  Ptr{Ptr{FeatureNode}}   # sparse rep. (array of feature_node) of one training vector
-    bias            ::  Float64                 # if bias >= 0, isntance x becomes [x; bias]; if < 0, no bias term (default -1)
+    l             :: Cint                    # num of instances
+    n             :: Cint                    # num of features, including bias feature if bias >= 0
+    y             :: Ptr{Float64}            # target values
+    x             :: Ptr{Ptr{FeatureNode}}   # sparse rep. (array of feature_node) of one training vector
+    bias          :: Float64                 # if bias >= 0, isntance x becomes [x; bias]; if < 0, no bias term (default -1)
 end
 
 struct Parameter
-    solver_type     ::  Cint
-    eps             ::  Float64
-    C               ::  Float64
-    nr_weight       ::  Cint
-    weight_label    ::  Ptr{Cint}
-    weight          ::  Ptr{Float64}
-    p               ::  Float64
-    init_sol        ::  Ptr{Float64}            # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
+    solver_type   :: Cint
+    eps           :: Float64
+    C             :: Float64
+    nr_weight     :: Cint
+    weight_label  :: Ptr{Cint}
+    weight        :: Ptr{Float64}
+    p             :: Float64
+    init_sol      :: Ptr{Float64}            # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
 end
 
 struct Model
-    param           ::  Parameter
-    nr_class        ::  Cint                    # number of class
-    nr_feature      ::  Cint
-    w               ::  Ptr{Float64}
-    label           ::  Ptr{Cint}               # label of each class
-    bias            ::  Float64
+    param         :: Parameter
+    nr_class      :: Cint                    # number of class
+    nr_feature    :: Cint
+    w             :: Ptr{Float64}
+    label         :: Ptr{Cint}               # label of each class
+    bias          :: Float64
 end
 
 # model in julia
 mutable struct LinearModel{T}
-  solver_type       ::  Cint
-  nr_class          ::  Int
-  nr_feature        ::  Int
-  w                 ::  Vector{Float64}
-  _labels           ::  Vector{Cint}            # internal label names
-  labels            ::  Vector{T}
-  bias              ::  Float64
-end
-
-# get library
-let liblinear = C_NULL
-    global get_liblinear
-    function get_liblinear()
-        if liblinear == C_NULL
-            libpath = joinpath(dirname(@__FILE__), "..", "deps")
-            libfile = is_windows() ?
-                joinpath(libpath, "liblinear$(Sys.WORD_SIZE).dll") :
-                joinpath(libpath, "liblinear.so.3")
-            liblinear = Libdl.dlopen(libfile)
-            ccall(Libdl.dlsym(liblinear, :set_print_string_function), Void,
-                (Ptr{Void},),
-                cfunction(linear_print, Void, (Ptr{UInt8},)))
-        end
-        liblinear
-    end
+  solver_type     :: Cint
+  nr_class        :: Int
+  nr_feature      :: Int
+  w               :: Vector{Float64}
+  _labels         :: Vector{Cint}            # internal label names
+  labels          :: Vector{T}
+  bias            :: Float64
 end
 
 # helper
@@ -89,6 +74,24 @@ function linear_print(str::Ptr{UInt8})
         print(unsafe_string(str))
     end
     nothing
+end
+
+# get library
+let liblinear = C_NULL
+    global get_liblinear
+    function get_liblinear()
+        if liblinear == C_NULL
+            libpath = joinpath(dirname(@__FILE__), "..", "deps")
+            libfile = Sys.iswindows() ?
+                joinpath(libpath, "liblinear$(Sys.WORD_SIZE).dll") :
+                joinpath(libpath, "liblinear.so.3")
+            liblinear = Libdl.dlopen(libfile)
+            ccall(Libdl.dlsym(liblinear, :set_print_string_function), Cvoid,
+                (Ptr{Cvoid},),
+                @cfunction(linear_print, Cvoid, (Ptr{UInt8},)))
+        end
+        liblinear
+    end
 end
 
 macro cachedsym(symname)
@@ -112,7 +115,7 @@ end
 function grp2idx(::Type{S}, labels::AbstractVector,
     label_dict::Dict{T, Cint}, reverse_labels::Vector{T}) where {T, S <: Real}
 
-    idx = Array{S}(length(labels))
+    idx = Array{S}(undef, length(labels))
     nextkey = length(reverse_labels) + 1
     for i = 1:length(labels)
         key = labels[i]
@@ -127,12 +130,12 @@ end
 
 # helper
 function indices_and_weights(
-            labels      ::  AbstractVector{T},
-            instances   ::  AbstractMatrix{U},
-            weights     ::  Union{Dict{T, Float64}, Void}=nothing
+            labels    :: AbstractVector{T},
+            instances :: AbstractMatrix{U},
+            weights   :: Union{Dict{T, Float64}, Cvoid}=nothing
             ) where {T, U<:Real}
     label_dict = Dict{T, Cint}()
-    reverse_labels = Array{T}(0)
+    reverse_labels = Array{T}(undef, 0)
     idx = grp2idx(Float64, labels, label_dict, reverse_labels)
 
     if length(labels) != size(instances, 2)
@@ -157,8 +160,8 @@ end
 function instances2nodes(instances::AbstractMatrix{U}) where U<:Real
     nfeatures  = size(instances, 1)
     ninstances = size(instances, 2)
-    nodeptrs   = Array{Ptr{FeatureNode}}(ninstances)
-    nodes      = Array{FeatureNode}(nfeatures + 1, ninstances)
+    nodeptrs   = Array{Ptr{FeatureNode}}(undef, ninstances)
+    nodes      = Array{FeatureNode}(undef, nfeatures + 1, ninstances)
 
     for i = 1:ninstances
         k = 1
@@ -176,8 +179,8 @@ end
 # helper
 function instances2nodes(instances::SparseMatrixCSC{U}) where U<:Real
     ninstances = size(instances, 2)
-    nodeptrs   = Array{Ptr{FeatureNode}}(ninstances)
-    nodes      = Array{FeatureNode}(nnz(instances) + ninstances)
+    nodeptrs   = Array{Ptr{FeatureNode}}(undef, ninstances)
+    nodes      = Array{FeatureNode}(undef, nnz(instances) + ninstances)
 
     j = 1
     k = 1
@@ -198,17 +201,17 @@ end
 
 # train
 function linear_train(
-            labels          ::  AbstractVector{T},
-            instances       ::  AbstractMatrix{U};
+            labels        :: AbstractVector{T},
+            instances     :: AbstractMatrix{U};
             # optional parameters
-            weights         ::  Union{Dict{T, Float64}, Void}=nothing,
-            solver_type     ::  Cint=L2R_L2LOSS_SVC_DUAL,
-            eps             ::  Real=Inf,
-            C               ::  Real=1.0,
-            p               ::  Real=0.1,
-            init_sol        ::  Ptr{Float64}=convert(Ptr{Float64}, C_NULL), # initial solutions for solvers L2R_LR, L2R_L2LOSS_SVC
-            bias            ::  Real=-1.0,
-            verbose         ::  Bool=false
+            weights       :: Union{Dict{T, Float64}, Cvoid}=nothing,
+            solver_type   :: Cint=L2R_L2LOSS_SVC_DUAL,
+            eps           :: Real=Inf,
+            C             :: Real=1.0,
+            p             :: Real=0.1,
+            init_sol      :: Ptr{Float64}=convert(Ptr{Float64}, C_NULL), # initial solutions for solvers L2R_LR, L2R_L2LOSS_SVC
+            bias          :: Real=-1.0,
+            verbose       :: Bool=false
             ) where {T, U<:Real}
     global verbosity
     verbosity = verbose
@@ -235,7 +238,7 @@ function linear_train(
     (idx, reverse_labels, weights, weight_labels) =
         indices_and_weights(labels, instances, weights)
 
-    param = Array{Parameter}(1)
+    param = Array{Parameter}(undef, 1)
     param[1] = Parameter(solver_type, eps, C, Cint(length(weights)),
         pointer(weight_labels), pointer(weights), p, init_sol)
 
@@ -264,17 +267,17 @@ function linear_train(
     _labels  = copy(unsafe_wrap(Array, m.label, m.nr_class))
     model    = LinearModel(solver_type, Int(m.nr_class), Int(m.nr_feature),
                     w, _labels, reverse_labels, m.bias)
-    ccall(free_model_content(), Void, (Ptr{Model},), ptr)
+    ccall(free_model_content(), Cvoid, (Ptr{Model},), ptr)
 
     model
 end
 
 # predict
 function linear_predict(
-            model                   ::  LinearModel{T},
-            instances               ::  AbstractMatrix{U};
-            probability_estimates   ::  Bool=false,
-            verbose                 ::  Bool=false) where {T, U<:Real}
+            model                 :: LinearModel{T},
+            instances             :: AbstractMatrix{U};
+            probability_estimates :: Bool=false,
+            verbose               :: Bool=false) where {T, U<:Real}
     global verbosity
     verbosity  = verbose
     ninstances = size(instances, 2) # instances are in columns
@@ -286,7 +289,7 @@ function linear_predict(
     model.bias >= 0 &&
         (instances = [instances; fill(model.bias, 1, ninstances)])
 
-    m = Array{Model}(1)
+    m = Array{Model}(undef, 1)
     m[1] = Model(Parameter(model.solver_type, .0, .0, Cint(0),
             convert(Ptr{Cint}, C_NULL), convert(Ptr{Float64}, C_NULL), .0,
             convert(Ptr{Float64}, C_NULL)),
@@ -294,14 +297,14 @@ function linear_predict(
             pointer(model._labels), model.bias)
 
     (nodes, nodeptrs) = instances2nodes(instances)
-    class = Array{T}(ninstances)
+    class = Array{T}(undef, ninstances)
     w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ?
         1 : model.nr_class)
-    decvalues = Array{Float64}(w_number, ninstances)
+    decvalues = Array{Float64}(undef, w_number, ninstances)
     fn = probability_estimates ? predict_probability() :
         predict_values()
     for i = 1:ninstances
-        output = ccall(fn, Float64, (Ptr{Void}, Ptr{FeatureNode}, Ptr{Float64}),
+        output = ccall(fn, Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
             pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
         class[i] = model.labels[round(Int,output)]
     end
