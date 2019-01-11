@@ -1,9 +1,7 @@
-# LIBLINEAR
+# LIBLINEAR_wmod
 
-[![Build Status](https://travis-ci.org/innerlee/LIBLINEAR.jl.svg?branch=master)](https://travis-ci.org/innerlee/LIBLINEAR.jl)
-[![Build status](https://ci.appveyor.com/api/projects/status/x9jq6w5mji1u6eff?svg=true)](https://ci.appveyor.com/project/innerlee/liblinear-jl)
-
-Julia bindings for [LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/liblinear/).
+Julia bindings for [modified LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/#weights_for_data_instances).
+This version uses an instance that admits weights in the loss function per data sample.
 
 ```julia
 using RDatasets, LIBLINEAR
@@ -31,6 +29,6 @@ model = linear_train(labels[1:2:end], instances[:, 1:2:end], verbose=true);
 ```
 ## Credits
 
-Created by Zhizhong Li.
+Created by Zhizhong Li. Forked by Javier Zazo with modified [binaries](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/#weights_for_data_instances).
 
 This package is adapted from the [LIBSVM](https://github.com/simonster/LIBSVM.jl) Julia package by Simon Kornblith.
