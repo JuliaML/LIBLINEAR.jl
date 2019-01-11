@@ -6,7 +6,8 @@
 Julia bindings for [LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/liblinear/).
 
 ```julia
-using RDatasets
+using RDatasets, LIBLINEAR
+using Printf, Statistics
 
 # Load Fisher's classic iris data
 iris = dataset("datasets", "iris")
@@ -15,7 +16,7 @@ iris = dataset("datasets", "iris")
 labels = iris[:Species]
 
 # First dimension of input data is features; second is instances
-instances = convert(Array,iris[:, 1:4])'
+instances = convert(Matrix, iris[:, 1:4])'
 
 # Train SVM on half of the data using default parameters. See the linear_train
 # function in LIBLINEAR.jl for optional parameter settings.
