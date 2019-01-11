@@ -1,5 +1,5 @@
 __precompile__(true)
-module LIBLINEAR
+module LIBLINEAR_weights
 
 using SparseArrays
 using Libdl

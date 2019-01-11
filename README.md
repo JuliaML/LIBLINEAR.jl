@@ -1,4 +1,4 @@
-# LIBLINEAR_wmod
+# LIBLINEAR_weights.jl
 
 Julia bindings for [LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/liblinear/).
 This version uses an instance that admits weights in the loss function per data sample.
@@ -29,6 +29,6 @@ model = linear_train(labels[1:2:end], instances[:, 1:2:end], verbose=true);
 ```
 ## Credits
 
-Created by Zhizhong Li. Forked by Javier Zazo with modified [binaries](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/#weights_for_data_instances).
+Created by Zhizhong Li. Forked by Javier Zazo with modified [sources](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/#weights_for_data_instances).
 
 This package is adapted from the [LIBSVM](https://github.com/simonster/LIBSVM.jl) Julia package by Simon Kornblith.
