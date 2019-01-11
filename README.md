@@ -1,6 +1,6 @@
 # LIBLINEAR_wmod
 
-Julia bindings for [modified LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/#weights_for_data_instances).
+Julia bindings for [LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/liblinear/).
 This version uses an instance that admits weights in the loss function per data sample.
 
 ```julia
