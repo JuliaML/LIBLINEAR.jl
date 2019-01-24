@@ -35,6 +35,7 @@ struct Problem
     y             :: Ptr{Float64}            # target values
     x             :: Ptr{Ptr{FeatureNode}}   # sparse rep. (array of feature_node) of one training vector
     bias          :: Float64                 # if bias >= 0, isntance x becomes [x; bias]; if < 0, no bias term (default -1)
+    W             :: Ptr{Float64}            # assign weights for each instance; make sure all weights are non-negative
 end
 
 struct Parameter
@@ -81,10 +82,10 @@ let liblinear = C_NULL
     global get_liblinear
     function get_liblinear()
         if liblinear == C_NULL
-            libpath = joinpath(dirname(@__FILE__), "..", "deps")
+            libpath = joinpath(@__DIR__, "..", "deps")
             libfile = Sys.iswindows() ?
-                joinpath(libpath, "liblinear$(Sys.WORD_SIZE).dll") :
-                joinpath(libpath, "liblinear.so.3")
+                joinpath(libpath, "liblinear-weishts$(Sys.WORD_SIZE).dll") :
+                joinpath(libpath, "liblinear-weights.so.3")
             liblinear = Libdl.dlopen(libfile)
             ccall(Libdl.dlsym(liblinear, :set_print_string_function), Cvoid,
                 (Ptr{Cvoid},),
@@ -211,6 +212,7 @@ function linear_train(
             p             :: Real=0.1,
             init_sol      :: Ptr{Float64}=convert(Ptr{Float64}, C_NULL), # initial solutions for solvers L2R_LR, L2R_L2LOSS_SVC
             bias          :: Real=-1.0,
+            W             :: Vector{Float64}, # required weight values
             verbose       :: Bool=false
             ) where {T, U<:Real}
     global verbosity
@@ -246,7 +248,7 @@ function linear_train(
     (nodes, nodeptrs) = instances2nodes(instances)
 
     problem = Problem[Problem(Cint(size(instances, 2)),
-        Cint(size(instances, 1)), pointer(idx), pointer(nodeptrs), bias)]
+        Cint(size(instances, 1)), pointer(idx), pointer(nodeptrs), bias, pointer(W))]
 
     chk = ccall(check_parameter(), Ptr{UInt8},
         (Ptr{Problem}, Ptr{Parameter}),
