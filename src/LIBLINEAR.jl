@@ -22,7 +22,6 @@ const L2R_L2LOSS_SVR      = Cint(11)
 const L2R_L2LOSS_SVR_DUAL = Cint(12)
 const L2R_L1LOSS_SVR_DUAL = Cint(13)
 
-verbosity = false
 
 struct FeatureNode
     index         :: Cint
@@ -69,11 +68,21 @@ mutable struct LinearModel{T}
 end
 
 # helper
-function linear_print(str::Ptr{Cvoid})
-    # if verbosity
-    #     print(unsafe_string(str))
-    # end
-    # nothing
+libpath = joinpath(dirname(@__FILE__), "..", "deps")
+libzzfile = Sys.iswindows() ?
+            joinpath(libpath, "libzz$(Sys.WORD_SIZE).dll") :
+            joinpath(libpath, "libzz.so")
+
+libzz = Libdl.dlopen(libzzfile)
+
+function set_print(verbose::Bool)
+    if verbose
+        ccall(Libdl.dlsym(get_liblinear(), :set_print_string_function), Cvoid,
+            (Ptr{Cvoid},), C_NULL)
+    else
+        ccall(Libdl.dlsym(get_liblinear(), :set_print_string_function), Cvoid,
+            (Ptr{Cvoid},), Libdl.dlsym(libzz, :print_null))
+    end
 end
 
 # get library
@@ -85,14 +94,7 @@ let liblinear = C_NULL
             libfile = Sys.iswindows() ?
                 joinpath(libpath, "liblinear$(Sys.WORD_SIZE).dll") :
                 joinpath(libpath, "liblinear.so.3")
-            libzzfile = Sys.iswindows() ?
-                joinpath(libpath, "libzz$(Sys.WORD_SIZE).dll") :
-                joinpath(libpath, "libzz.so")
             liblinear = Libdl.dlopen(libfile)
-            libzz = Libdl.dlopen(libzzfile)
-            ccall(Libdl.dlsym(liblinear, :set_print_string_function), Cvoid,
-                (Ptr{Cvoid},),
-                Libdl.dlsym(libzz, :print_null))
         end
         liblinear
     end
@@ -217,8 +219,7 @@ function linear_train(
             bias          :: Real=-1.0,
             verbose       :: Bool=false
             ) where {T, U<:Real}
-    global verbosity
-    verbosity = verbose
+    set_print(verbose)
     eps, C, p, bias = map(Float64, (eps, C, p, bias))
 
     isinf(eps) && (eps = Dict(
@@ -282,8 +283,7 @@ function linear_predict(
             instances             :: AbstractMatrix{U};
             probability_estimates :: Bool=false,
             verbose               :: Bool=false) where {T, U<:Real}
-    global verbosity
-    verbosity  = verbose
+    set_print(verbose)
     ninstances = size(instances, 2) # instances are in columns
 
     size(instances, 1) != model.nr_feature &&
