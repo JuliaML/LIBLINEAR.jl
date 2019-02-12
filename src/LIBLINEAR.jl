@@ -70,9 +70,9 @@ end
 
 # helper
 function linear_print(str::Cstring)
-    if verbosity
-        print(unsafe_string(str))
-    end
+    # if verbosity
+    #     print(unsafe_string(str))
+    # end
     nothing
 end
 
