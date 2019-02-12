@@ -6,6 +6,7 @@
 #include <locale.h>
 #include "linear.h"
 #include "tron.h"
+int liblinear_version = LIBLINEAR_VERSION;
 typedef signed char schar;
 template <class T> static inline void swap(T& x, T& y) { T t=x; x=y; y=t; }
 #ifndef min
@@ -90,6 +91,7 @@ public:
 	void Hv(double *s, double *Hs);
 
 	int get_nr_variable(void);
+	void get_diag_preconditioner(double *M);
 
 private:
 	void Xv(double *v, double *Xv);
@@ -168,12 +170,32 @@ int l2r_lr_fun::get_nr_variable(void)
 	return prob->n;
 }
 
+void l2r_lr_fun::get_diag_preconditioner(double *M)
+{
+	int i;
+	int l = prob->l;
+	int w_size=get_nr_variable();
+	feature_node **x = prob->x;
+
+	for (i=0; i<w_size; i++)
+		M[i] = 1;
+
+	for (i=0; i<l; i++)
+	{
+		feature_node *s = x[i];
+		while (s->index!=-1)
+		{
+			M[s->index-1] += s->value*s->value*C[i]*D[i];
+			s++;
+		}
+	}
+}
+
 void l2r_lr_fun::Hv(double *s, double *Hs)
 {
 	int i;
 	int l=prob->l;
 	int w_size=get_nr_variable();
-	double *wa = new double[l];
 	feature_node **x=prob->x;
 
 	for(i=0;i<w_size;i++)
@@ -181,15 +203,14 @@ void l2r_lr_fun::Hv(double *s, double *Hs)
 	for(i=0;i<l;i++)
 	{
 		feature_node * const xi=x[i];
-		wa[i] = sparse_operator::dot(s, xi);
+		double xTs = sparse_operator::dot(s, xi);
 
-		wa[i] = C[i]*D[i]*wa[i];
+		xTs = C[i]*D[i]*xTs;
 
-		sparse_operator::axpy(wa[i], xi, Hs);
+		sparse_operator::axpy(xTs, xi, Hs);
 	}
 	for(i=0;i<w_size;i++)
 		Hs[i] = s[i] + Hs[i];
-	delete[] wa;
 }
 
 void l2r_lr_fun::Xv(double *v, double *Xv)
@@ -226,6 +247,7 @@ public:
 	void Hv(double *s, double *Hs);
 
 	int get_nr_variable(void);
+	void get_diag_preconditioner(double *M);
 
 protected:
 	void Xv(double *v, double *Xv);
@@ -233,7 +255,6 @@ protected:
 
 	double *C;
 	double *z;
-	double *D;
 	int *I;
 	int sizeI;
 	const problem *prob;
@@ -246,7 +267,6 @@ l2r_l2_svc_fun::l2r_l2_svc_fun(const problem *prob, double *C)
 	this->prob = prob;
 
 	z = new double[l];
-	D = new double[l];
 	I = new int[l];
 	this->C = C;
 }
@@ -254,7 +274,6 @@ l2r_l2_svc_fun::l2r_l2_svc_fun(const problem *prob, double *C)
 l2r_l2_svc_fun::~l2r_l2_svc_fun()
 {
 	delete[] z;
-	delete[] D;
 	delete[] I;
 }
 
@@ -308,11 +327,31 @@ int l2r_l2_svc_fun::get_nr_variable(void)
 	return prob->n;
 }
 
+void l2r_l2_svc_fun::get_diag_preconditioner(double *M)
+{
+	int i;
+	int w_size=get_nr_variable();
+	feature_node **x = prob->x;
+
+	for (i=0; i<w_size; i++)
+		M[i] = 1;
+
+	for (i=0; i<sizeI; i++)
+	{
+		int idx = I[i];
+		feature_node *s = x[idx];
+		while (s->index!=-1)
+		{
+			M[s->index-1] += s->value*s->value*C[idx]*2;
+			s++;
+		}
+	}
+}
+
 void l2r_l2_svc_fun::Hv(double *s, double *Hs)
 {
 	int i;
 	int w_size=get_nr_variable();
-	double *wa = new double[sizeI];
 	feature_node **x=prob->x;
 
 	for(i=0;i<w_size;i++)
@@ -320,15 +359,14 @@ void l2r_l2_svc_fun::Hv(double *s, double *Hs)
 	for(i=0;i<sizeI;i++)
 	{
 		feature_node * const xi=x[I[i]];
-		wa[i] = sparse_operator::dot(s, xi);
+		double xTs = sparse_operator::dot(s, xi);
 
-		wa[i] = C[I[i]]*wa[i];
+		xTs = C[I[i]]*xTs;
 
-		sparse_operator::axpy(wa[i], xi, Hs);
+		sparse_operator::axpy(xTs, xi, Hs);
 	}
 	for(i=0;i<w_size;i++)
 		Hs[i] = s[i] + 2*Hs[i];
-	delete[] wa;
 }
 
 void l2r_l2_svc_fun::Xv(double *v, double *Xv)
@@ -2386,7 +2424,7 @@ model* train(const problem *prob, const parameter *param)
 
 					train_one(&sub_prob, param, w, weighted_C[i], param->C);
 
-					for(int j=0;j<w_size;j++)
+					for(j=0;j<w_size;j++)
 						model_->w[j*nr_class+i] = w[j];
 				}
 				free(w);
@@ -2754,14 +2792,14 @@ int save_model(const char *model_file_name, const struct model *model_)
 
 	fprintf(fp, "nr_feature %d\n", nr_feature);
 
-	fprintf(fp, "bias %.16g\n", model_->bias);
+	fprintf(fp, "bias %.17g\n", model_->bias);
 
 	fprintf(fp, "w\n");
 	for(i=0; i<w_size; i++)
 	{
 		int j;
 		for(j=0; j<nr_w; j++)
-			fprintf(fp, "%.16g ", model_->w[i*nr_w+j]);
+			fprintf(fp, "%.17g ", model_->w[i*nr_w+j]);
 		fprintf(fp, "\n");
 	}
 
@@ -2808,6 +2846,11 @@ struct model *load_model(const char *model_file_name)
 	double bias;
 	model *model_ = Malloc(model,1);
 	parameter& param = model_->param;
+	// parameters for training only won't be assigned, but arrays are assigned as NULL for safety
+	param.nr_weight = 0;
+	param.weight_label = NULL;
+	param.weight = NULL;	
+	param.init_sol = NULL;
 
 	model_->label = NULL;
 
@@ -2891,11 +2934,6 @@ struct model *load_model(const char *model_file_name)
 		int j;
 		for(j=0; j<nr_w; j++)
 			FSCANF(fp, "%lf ", &model_->w[i*nr_w+j]);
-		if (fscanf(fp, "\n") !=0)
-		{
-			fprintf(stderr, "ERROR: fscanf failed to read the model\n");
-			EXIT_LOAD_MODEL()
-		}
 	}
 
 	setlocale(LC_ALL, old_locale);
@@ -2998,7 +3036,6 @@ void destroy_param(parameter* param)
 		free(param->init_sol);
 }
 
-
 const char *check_parameter(const problem *prob, const parameter *param)
 {
 	if(param->eps <= 0)
@@ -3051,3 +3088,4 @@ void set_print_string_function(void (*print_func)(const char*))
 	else
 		liblinear_print_string = print_func;
 }
+
