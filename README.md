@@ -15,7 +15,7 @@ iris = dataset("datasets", "iris")
 # LIBLINEAR handles multi-class data automatically using a one-against-the rest strategy
 labels = iris[:Species]
 
-# First dimension of input data is features; second is data
+# First dimension of input data is features; second is instances
 data = convert(Matrix, iris[:, 1:4])'
 
 # Train SVM on half of the data using default parameters. See the linear_train
