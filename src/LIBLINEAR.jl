@@ -71,7 +71,7 @@ end
 # helper
 function linear_print(str::Ptr{UInt8})
     # if verbosity
-        print(unsafe_string(str))
+        # print(unsafe_string(str))
     # end
     nothing
 end
