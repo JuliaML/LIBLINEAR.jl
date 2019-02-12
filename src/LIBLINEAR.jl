@@ -85,8 +85,11 @@ let liblinear = C_NULL
             libfile = Sys.iswindows() ?
                 joinpath(libpath, "liblinear$(Sys.WORD_SIZE).dll") :
                 joinpath(libpath, "liblinear.so.3")
+            libzzfile = Sys.iswindows() ?
+                joinpath(libpath, "libzz$(Sys.WORD_SIZE).dll") :
+                joinpath(libpath, "libzz.so")
             liblinear = Libdl.dlopen(libfile)
-            libzz = Libdl.dlopen(joinpath(dirname(@__FILE__), "..", "deps", "libzz.so"))
+            libzz = Libdl.dlopen(libzzfile)
             ccall(Libdl.dlsym(liblinear, :set_print_string_function), Cvoid,
                 (Ptr{Cvoid},),
                 Libdl.dlsym(libzz, :print_null))
