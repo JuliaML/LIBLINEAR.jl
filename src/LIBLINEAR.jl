@@ -86,9 +86,9 @@ let liblinear = C_NULL
                 joinpath(libpath, "liblinear$(Sys.WORD_SIZE).dll") :
                 joinpath(libpath, "liblinear.so.3")
             liblinear = Libdl.dlopen(libfile)
-            ccall(Libdl.dlsym(liblinear, :set_print_string_function), Cvoid,
-                (Ptr{Cvoid},),
-                @cfunction(linear_print, Cvoid, (Ptr{UInt8},)))
+            # ccall(Libdl.dlsym(liblinear, :set_print_string_function), Cvoid,
+            #     (Ptr{Cvoid},),
+            #     @cfunction(linear_print, Cvoid, (Ptr{UInt8},)))
         end
         liblinear
     end
