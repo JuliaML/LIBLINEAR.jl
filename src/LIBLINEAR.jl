@@ -69,11 +69,11 @@ mutable struct LinearModel{T}
 end
 
 # helper
-function linear_print(str::Cstring)
+function linear_print(str::Ptr{Cvoid})
     # if verbosity
     #     print(unsafe_string(str))
     # end
-    nothing
+    # nothing
 end
 
 # get library
@@ -88,7 +88,7 @@ let liblinear = C_NULL
             liblinear = Libdl.dlopen(libfile)
             ccall(Libdl.dlsym(liblinear, :set_print_string_function), Cvoid,
                 (Ptr{Cvoid},),
-                @cfunction(linear_print, Cvoid, (Cstring,)))
+                @cfunction(linear_print, Cvoid, (Ptr{Cvoid},)))
         end
         liblinear
     end
