@@ -68,20 +68,13 @@ mutable struct LinearModel{T}
 end
 
 # helper
-libpath = joinpath(dirname(@__FILE__), "..", "deps")
-libzzfile = Sys.iswindows() ?
-            joinpath(libpath, "libzz$(Sys.WORD_SIZE).dll") :
-            joinpath(libpath, "libzz.so")
-
-libzz = Libdl.dlopen(libzzfile)
-
 function set_print(verbose::Bool)
     if verbose
         ccall(Libdl.dlsym(get_liblinear(), :set_print_string_function), Cvoid,
             (Ptr{Cvoid},), C_NULL)
     else
         ccall(Libdl.dlsym(get_liblinear(), :set_print_string_function), Cvoid,
-            (Ptr{Cvoid},), Libdl.dlsym(libzz, :print_null))
+            (Ptr{Cvoid},), Libdl.dlsym(get_libzz(), :print_null))
     end
 end
 
@@ -97,6 +90,20 @@ let liblinear = C_NULL
             liblinear = Libdl.dlopen(libfile)
         end
         liblinear
+    end
+end
+
+let libzz = C_NULL
+    global get_libzz
+    function get_libzz()
+        if libzz == C_NULL
+            libpath = joinpath(dirname(@__FILE__), "..", "deps")
+            libfile = Sys.iswindows() ?
+                joinpath(libpath, "libzz$(Sys.WORD_SIZE).dll") :
+                joinpath(libpath, "libzz.so")
+            libzz = Libdl.dlopen(libfile)
+        end
+        libzz
     end
 end
 
