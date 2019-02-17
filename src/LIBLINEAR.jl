@@ -162,8 +162,8 @@ function indices_and_weights(
         weight_labels = Cint[]
         weights = Float64[]
     else
-        weight_labels = grp2idx(Cint, keys(weights), label_dict, reverse_labels)
-        weights = Float64(values(weights))
+        weight_labels = grp2idx(Cint, collect(keys(weights)), label_dict, reverse_labels)
+        weights = collect(values(weights))
     end
 
     (idx, reverse_labels, weights, weight_labels)
