@@ -2,7 +2,7 @@ name = "LIBLINEAR"
 uuid = "2d691ee1-e668-5016-a719-b2531b85e0f5"
 authors = ["innerlee"]
 repo = "https://github.com/innerlee/LIBLINEAR.jl.git"
-version = "0.5.0"
+version = "0.5.1"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
