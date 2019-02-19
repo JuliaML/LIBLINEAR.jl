@@ -70,11 +70,11 @@ end
 # helper
 function set_print(verbose::Bool)
     if verbose
-        ccall(Libdl.dlsym(get_liblinear(), :set_print_string_function), Cvoid,
+        ccall(set_print_string_function(), Cvoid,
             (Ptr{Cvoid},), C_NULL)
     else
-        ccall(Libdl.dlsym(get_liblinear(), :set_print_string_function), Cvoid,
-            (Ptr{Cvoid},), Libdl.dlsym(get_libzz(), :print_null))
+        ccall(set_print_string_function(), Cvoid,
+            (Ptr{Cvoid},), print_null())
     end
 end
 
@@ -107,6 +107,19 @@ let libzz = C_NULL
     end
 end
 
+macro cachedsymzz(symname)
+    cached = gensym()
+    quote
+        let $cached = C_NULL
+            global ($symname)
+            ($symname)() = ($cached) == C_NULL ?
+                ($cached = Libdl.dlsym(get_libzz(), $(string(symname)))) :
+                    $cached
+        end
+    end
+end
+@cachedsymzz print_null
+
 macro cachedsym(symname)
     cached = gensym()
     quote
@@ -118,6 +131,7 @@ macro cachedsym(symname)
         end
     end
 end
+@cachedsym set_print_string_function
 @cachedsym train
 @cachedsym predict_values
 @cachedsym predict_probability
