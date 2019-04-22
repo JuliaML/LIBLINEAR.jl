@@ -2,30 +2,30 @@
 language: julia
 
 os:
-  - linux
-  - osx
+    - linux
+    - osx
 
 julia:
-  - 1.0
-  - nightly
+    - 1.0
+    - nightly
 
 notifications:
-  email: false
+    email: false
 
 before_script:
-  - export PATH=$HOME/.local/bin:$PATH
+    - export PATH=$HOME/.local/bin:$PATH
 
 git:
-  depth: 99999999
+    depth: 99999999
 
 script:
-  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - pwd
-  - ls
-  - julia --project --check-bounds=yes -e 'import Pkg; Pkg.clone(pwd(), "LIBLINEAR"); Pkg.build("LIBLINEAR"); Pkg.test("LIBLINEAR"; coverage=true)'
+    - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+    - pwd
+    - ls
+    - julia --project --check-bounds=yes -e 'using UUIDs; write("Project.toml", replace(read("Project.toml", String), r"uuid = .*?\n" =>"uuid = \"$(uuid4())\"\n"));import Pkg; Pkg.build(); Pkg.test(; coverage=true)'
 
 after_success:
-  # push coverage results to Coveralls
-  - julia --project -e 'import Pkg; Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
-  # push coverage results to Codecov
-  - julia --project -e 'import Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+    # push coverage results to Coveralls
+    - julia --project -e 'import Pkg; Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
+    # push coverage results to Codecov
+    - julia --project -e 'import Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
