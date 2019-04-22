@@ -231,6 +231,7 @@ end
 function linear_train(
             labels        :: AbstractVector{T},
             instances     :: AbstractMatrix{U};
+            W             :: Vector{Float64},  # required weight values
             # optional parameters
             weights       :: Union{Dict{T, Float64}, Cvoid}=nothing,
             solver_type   :: Cint=L2R_L2LOSS_SVC_DUAL,
@@ -239,7 +240,6 @@ function linear_train(
             p             :: Real=0.1,
             init_sol      :: Ptr{Float64}=convert(Ptr{Float64}, C_NULL), # initial solutions for solvers L2R_LR, L2R_L2LOSS_SVC
             bias          :: Real=-1.0,
-            W             :: Vector{Float64}, # required weight values
             verbose       :: Bool=false
             ) where {T, U<:Real}
     set_print(verbose)
