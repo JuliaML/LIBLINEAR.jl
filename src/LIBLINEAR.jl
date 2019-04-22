@@ -22,7 +22,6 @@ const L2R_L2LOSS_SVR      = Cint(11)
 const L2R_L2LOSS_SVR_DUAL = Cint(12)
 const L2R_L1LOSS_SVR_DUAL = Cint(13)
 
-verbosity = false
 
 struct FeatureNode
     index         :: Cint
@@ -70,11 +69,14 @@ mutable struct LinearModel{T}
 end
 
 # helper
-function linear_print(str::Ptr{UInt8})
-    if verbosity
-        print(unsafe_string(str))
+function set_print(verbose::Bool)
+    if verbose
+        ccall(set_print_string_function(), Cvoid,
+            (Ptr{Cvoid},), C_NULL)
+    else
+        ccall(set_print_string_function(), Cvoid,
+            (Ptr{Cvoid},), print_null())
     end
-    nothing
 end
 
 # get library
@@ -87,13 +89,37 @@ let liblinear = C_NULL
                 joinpath(libpath, "liblinear-weishts$(Sys.WORD_SIZE).dll") :
                 joinpath(libpath, "liblinear-weights.so.3")
             liblinear = Libdl.dlopen(libfile)
-            ccall(Libdl.dlsym(liblinear, :set_print_string_function), Cvoid,
-                (Ptr{Cvoid},),
-                @cfunction(linear_print, Cvoid, (Ptr{UInt8},)))
         end
         liblinear
     end
 end
+
+let libzz = C_NULL
+    global get_libzz
+    function get_libzz()
+        if libzz == C_NULL
+            libpath = joinpath(dirname(@__FILE__), "..", "deps")
+            libfile = Sys.iswindows() ?
+                joinpath(libpath, "libzz$(Sys.WORD_SIZE).dll") :
+                joinpath(libpath, "libzz.so")
+            libzz = Libdl.dlopen(libfile)
+        end
+        libzz
+    end
+end
+
+macro cachedsymzz(symname)
+    cached = gensym()
+    quote
+        let $cached = C_NULL
+            global ($symname)
+            ($symname)() = ($cached) == C_NULL ?
+                ($cached = Libdl.dlsym(get_libzz(), $(string(symname)))) :
+                    $cached
+        end
+    end
+end
+@cachedsymzz print_null
 
 macro cachedsym(symname)
     cached = gensym()
@@ -106,6 +132,7 @@ macro cachedsym(symname)
         end
     end
 end
+@cachedsym set_print_string_function
 @cachedsym train
 @cachedsym predict_values
 @cachedsym predict_probability
@@ -150,8 +177,8 @@ function indices_and_weights(
         weight_labels = Cint[]
         weights = Float64[]
     else
-        weight_labels = grp2idx(Cint, keys(weights), label_dict, reverse_labels)
-        weights = Float64(values(weights))
+        weight_labels = grp2idx(Cint, collect(keys(weights)), label_dict, reverse_labels)
+        weights = collect(values(weights))
     end
 
     (idx, reverse_labels, weights, weight_labels)
@@ -215,8 +242,7 @@ function linear_train(
             W             :: Vector{Float64}, # required weight values
             verbose       :: Bool=false
             ) where {T, U<:Real}
-    global verbosity
-    verbosity = verbose
+    set_print(verbose)
     eps, C, p, bias = map(Float64, (eps, C, p, bias))
 
     isinf(eps) && (eps = Dict(
@@ -280,8 +306,7 @@ function linear_predict(
             instances             :: AbstractMatrix{U};
             probability_estimates :: Bool=false,
             verbose               :: Bool=false) where {T, U<:Real}
-    global verbosity
-    verbosity  = verbose
+    set_print(verbose)
     ninstances = size(instances, 2) # instances are in columns
 
     size(instances, 1) != model.nr_feature &&

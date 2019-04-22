@@ -16,14 +16,14 @@ iris = dataset("datasets", "iris")
 labels = iris[:Species]
 
 # First dimension of input data is features; second is instances
-instances = convert(Matrix, iris[:, 1:4])'
+data = convert(Matrix, iris[:, 1:4])'
 
 # Train SVM on half of the data using default parameters. See the linear_train
 # function in LIBLINEAR.jl for optional parameter settings.
-model = linear_train(labels[1:2:end], instances[:, 1:2:end], verbose=true);
+model = linear_train(labels[1:2:end], data[:, 1:2:end], verbose=true);
 
 # Test model on the other half of the data.
-(predicted_labels, decision_values) = linear_predict(model, instances[:, 2:2:end]);
+(predicted_labels, decision_values) = linear_predict(model, data[:, 2:2:end]);
 
 # Compute accuracy
 @printf "Accuracy: %.2f%%\n" mean((predicted_labels .== labels[2:2:end]))*100
