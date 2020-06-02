@@ -1,3 +1,0 @@
-LIBRARY libzz
-EXPORTS
-	print_null	@1
