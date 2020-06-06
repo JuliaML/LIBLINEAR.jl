@@ -6,14 +6,13 @@
 Julia bindings for [LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/liblinear/).
 
 ```julia
-using RDatasets, LIBLINEAR
-using Printf, Statistics
+using Statistics, RDatasets, LIBLINEAR
 
 # Load Fisher's classic iris data
 iris = dataset("datasets", "iris")
 
 # LIBLINEAR handles multi-class data automatically using a one-against-the rest strategy
-labels = iris[:Species]
+labels = iris.Species
 
 # First dimension of input data is features; second is instances
 data = convert(Matrix, iris[:, 1:4])'
@@ -26,7 +25,7 @@ model = linear_train(labels[1:2:end], data[:, 1:2:end], verbose=true);
 (predicted_labels, decision_values) = linear_predict(model, data[:, 2:2:end]);
 
 # Compute accuracy
-@printf "Accuracy: %.2f%%\n" mean((predicted_labels .== labels[2:2:end]))*100
+println("Accuracy: $(mean(predicted_labels .== labels[2:2:end])*100)")
 
 ```
 ## Credits

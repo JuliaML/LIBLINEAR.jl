@@ -3,6 +3,7 @@ module LIBLINEAR
 
 using SparseArrays
 using Libdl
+using liblinear_jll
 
 export
     LinearModel,
@@ -68,75 +69,20 @@ mutable struct LinearModel{T}
 end
 
 # helper
+
+print_null(x) = nothing
+
+
 function set_print(verbose::Bool)
     if verbose
-        ccall(set_print_string_function(), Cvoid,
+        ccall((:set_print_string_function, liblinear), Cvoid,
             (Ptr{Cvoid},), C_NULL)
     else
-        ccall(set_print_string_function(), Cvoid,
-            (Ptr{Cvoid},), print_null())
+        ccall((:set_print_string_function, liblinear), Cvoid,
+            (Ptr{Cvoid},), @cfunction(print_null, Cvoid, (Ref{Cstring},) ))
     end
 end
 
-# get library
-let liblinear = C_NULL
-    global get_liblinear
-    function get_liblinear()
-        if liblinear == C_NULL
-            libpath = joinpath(dirname(@__FILE__), "..", "deps")
-            libfile = Sys.iswindows() ?
-                joinpath(libpath, "liblinear$(Sys.WORD_SIZE).dll") :
-                joinpath(libpath, "liblinear.so.3")
-            liblinear = Libdl.dlopen(libfile)
-        end
-        liblinear
-    end
-end
-
-let libzz = C_NULL
-    global get_libzz
-    function get_libzz()
-        if libzz == C_NULL
-            libpath = joinpath(dirname(@__FILE__), "..", "deps")
-            libfile = Sys.iswindows() ?
-                joinpath(libpath, "libzz$(Sys.WORD_SIZE).dll") :
-                joinpath(libpath, "libzz.so")
-            libzz = Libdl.dlopen(libfile)
-        end
-        libzz
-    end
-end
-
-macro cachedsymzz(symname)
-    cached = gensym()
-    quote
-        let $cached = C_NULL
-            global ($symname)
-            ($symname)() = ($cached) == C_NULL ?
-                ($cached = Libdl.dlsym(get_libzz(), $(string(symname)))) :
-                    $cached
-        end
-    end
-end
-@cachedsymzz print_null
-
-macro cachedsym(symname)
-    cached = gensym()
-    quote
-        let $cached = C_NULL
-            global ($symname)
-            ($symname)() = ($cached) == C_NULL ?
-                ($cached = Libdl.dlsym(get_liblinear(), $(string(symname)))) :
-                    $cached
-        end
-    end
-end
-@cachedsym set_print_string_function
-@cachedsym train
-@cachedsym predict_values
-@cachedsym predict_probability
-@cachedsym free_model_content
-@cachedsym check_parameter
 
 # helper
 function grp2idx(::Type{S}, labels::AbstractVector,
@@ -274,14 +220,14 @@ function linear_train(
     problem = Problem[Problem(Cint(size(instances, 2)),
         Cint(size(instances, 1)), pointer(idx), pointer(nodeptrs), bias)]
 
-    chk = ccall(check_parameter(), Ptr{UInt8},
+    chk = ccall((:check_parameter, liblinear), Ptr{UInt8},
         (Ptr{Problem}, Ptr{Parameter}),
         problem, param)
 
     chk != convert(Ptr{UInt8}, C_NULL) &&
         error("Please check your parameters: $(unsafe_string(chk))")
 
-    ptr = ccall(train(), Ptr{Model},
+    ptr = ccall((:train, liblinear), Ptr{Model},
                 (Ptr{Problem}, Ptr{Parameter}),
                 problem, param)
     m = unsafe_wrap(Array, ptr, 1)[1]
@@ -293,7 +239,7 @@ function linear_train(
     _labels  = copy(unsafe_wrap(Array, m.label, m.nr_class))
     model    = LinearModel(solver_type, Int(m.nr_class), Int(m.nr_feature),
                     w, _labels, reverse_labels, m.bias)
-    ccall(free_model_content(), Cvoid, (Ptr{Model},), ptr)
+    ccall((:free_model_content, liblinear), Cvoid, (Ptr{Model},), ptr)
 
     model
 end
@@ -326,11 +272,14 @@ function linear_predict(
     w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ?
         1 : model.nr_class)
     decvalues = Array{Float64}(undef, w_number, ninstances)
-    fn = probability_estimates ? predict_probability() :
-        predict_values()
     for i = 1:ninstances
-        output = ccall(fn, Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
-            pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
+        if probability_estimates
+            output = ccall((:predict_probability, liblinear), Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
+                pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
+        else
+            output = ccall((:predict_values, liblinear), Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
+                pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
+        end
         class[i] = model.labels[round(Int,output)]
     end
 

@@ -8,6 +8,10 @@
 *.so.2
 *.so.3
 
+
+# Julia
+Manifest.toml
+
 #################
 ## Eclipse
 #################

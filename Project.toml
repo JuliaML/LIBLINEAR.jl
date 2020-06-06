@@ -2,14 +2,15 @@ name = "LIBLINEAR"
 uuid = "2d691ee1-e668-5016-a719-b2531b85e0f5"
 authors = ["innerlee"]
 repo = "https://github.com/innerlee/LIBLINEAR.jl.git"
-version = "0.5.1"
+version = "0.5.2"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+liblinear_jll = "275f1f90-abd2-5ca1-9ad8-abd4e3d66eb7"
 
 [compat]
-julia = "1.0"
+julia = "1.3"
 
 [extras]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
