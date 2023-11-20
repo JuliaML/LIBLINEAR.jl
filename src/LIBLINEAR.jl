@@ -237,14 +237,21 @@ function linear_train(
                 (Ptr{Problem}, Ptr{Parameter}),
                 problem, param)
     m = unsafe_wrap(Array, ptr, 1)[1]
-
     # extract w & _labels
     w_dim    = Int(m.nr_feature + (bias >= 0 ? 1 : 0))
     w_number = Int(m.nr_class == 2 && solver_type != MCSVM_CS ? 1 : m.nr_class)
     w        = copy(unsafe_wrap(Array, m.w, w_dim * w_number))
-    _labels  = copy(unsafe_wrap(Array, m.label, m.nr_class))
+
+    # Fill in labels vector
+    # using `_labels  = copy(unsafe_wrap(Array, m.label, m.nr_class))` segfaults
+    # when using `ONECLASS_SVM`. With this approach, we are just left with
+    # `_labels` being -1's, which seems better.
+    _labels = Vector{Cint}(undef, m.nr_class)
+    _labels .= -1 # initialize to some invalid state
+    ccall((:get_labels, liblinear), Cvoid, (Ptr{Model},Ptr{Vector{Cint}}), ptr, pointer(_labels))
+    rho = solver_type == ONECLASS_SVM ? m.rho : 0.0
     model    = LinearModel(solver_type, Int(m.nr_class), Int(m.nr_feature),
-                    w, _labels, reverse_labels, m.bias, m.rho)
+                    w, _labels, reverse_labels, m.bias, rho)
     ccall((:free_model_content, liblinear), Cvoid, (Ptr{Model},), ptr)
 
     model
@@ -274,7 +281,14 @@ function linear_predict(
             pointer(model._labels), model.bias, model.rho)
 
     (nodes, nodeptrs) = instances2nodes(instances)
-    class = Array{T}(undef, ninstances)
+
+    if model.solver_type == ONECLASS_SVM
+        # In this case we need to return inlier/outlier class labels
+        # which may not be of type `T`
+        class = Array{String}(undef, ninstances)
+    else
+        class = Array{T}(undef, ninstances)
+    end
     w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ?
         1 : model.nr_class)
     decvalues = Array{Float64}(undef, w_number, ninstances)
@@ -286,7 +300,19 @@ function linear_predict(
             output = ccall((:predict_values, liblinear), Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
                 pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
         end
-        class[i] = model.labels[round(Int,output)]
+        output_int = round(Int,output)
+
+        # For one-class SVM, `predict_values` returns +/- 1
+        # corresponding to outliers or not. This doesn't seem to be documented,
+        # but the code clearly returns +/- 1:
+        # https://github.com/cjlin1/liblinear/blob/8dc206b782e07676dc0d00678bedd295ce85acf3/linear.cpp#L3295
+        # and that is the return from scipy as well.
+        if model.solver_type === ONECLASS_SVM
+            c = output_int == -1 ? "outlier" :  output_int == 1 ? "inlier" : error("Unexpected output $output_int")
+        else
+            c = model.labels[output_int]
+        end
+        class[i] = c
     end
 
     (class, decvalues)
