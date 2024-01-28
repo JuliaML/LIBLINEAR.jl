@@ -45,7 +45,9 @@ struct Parameter
     weight_label  :: Ptr{Cint}
     weight        :: Ptr{Float64}
     p             :: Float64
+    nu            :: Float64
     init_sol      :: Ptr{Float64}            # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
+    regularize_bias :: Cint
 end
 
 struct Model
@@ -210,9 +212,12 @@ function linear_train(
     (idx, reverse_labels, weights, weight_labels) =
         indices_and_weights(labels, instances, weights)
 
-    param = Array{Parameter}(undef, 1)
-    param[1] = Parameter(solver_type, eps, C, Cint(length(weights)),
-        pointer(weight_labels), pointer(weights), p, init_sol)
+    # TODO: add these as function arguments
+    nu = 0.5
+    regularize_bias = 1
+    param = Parameter(solver_type, eps, C, Cint(length(weights)),
+                      pointer(weight_labels), pointer(weights), p, nu,
+                      C_NULL, regularize_bias)
 
     # construct problem
     (nodes, nodeptrs) = instances2nodes(instances)
@@ -221,14 +226,14 @@ function linear_train(
         Cint(size(instances, 1)), pointer(idx), pointer(nodeptrs), bias)]
 
     chk = ccall((:check_parameter, liblinear), Ptr{UInt8},
-        (Ptr{Problem}, Ptr{Parameter}),
+        (Ref{Problem}, Ref{Parameter}),
         problem, param)
 
     chk != convert(Ptr{UInt8}, C_NULL) &&
         error("Please check your parameters: $(unsafe_string(chk))")
 
     ptr = ccall((:train, liblinear), Ptr{Model},
-                (Ptr{Problem}, Ptr{Parameter}),
+                (Ref{Problem}, Ref{Parameter}),
                 problem, param)
     m = unsafe_wrap(Array, ptr, 1)[1]
 
