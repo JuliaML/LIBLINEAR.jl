@@ -1,4 +1,3 @@
-__precompile__(true)
 module LIBLINEAR
 
 using SparseArrays
@@ -22,7 +21,7 @@ const L2R_LR_DUAL         = Cint(7)
 const L2R_L2LOSS_SVR      = Cint(11)
 const L2R_L2LOSS_SVR_DUAL = Cint(12)
 const L2R_L1LOSS_SVR_DUAL = Cint(13)
-
+const ONECLASS_SVM        = Cint(21)
 
 struct FeatureNode
     index         :: Cint
@@ -38,14 +37,16 @@ struct Problem
 end
 
 struct Parameter
-    solver_type   :: Cint
-    eps           :: Float64
-    C             :: Float64
-    nr_weight     :: Cint
-    weight_label  :: Ptr{Cint}
-    weight        :: Ptr{Float64}
-    p             :: Float64
-    init_sol      :: Ptr{Float64}            # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
+    solver_type     :: Cint
+    eps             :: Float64                 # stopping tolerance
+    C               :: Float64
+    nr_weight       :: Cint
+    weight_label    :: Ptr{Cint}
+    weight          :: Ptr{Float64}
+    p               :: Float64
+    nu              :: Float64                 # one-class SVM only
+    init_sol        :: Ptr{Float64}            # Initial-solution specification supported only for solver L2R_LR and L2R_L2LOSS_SVC
+    regularize_bias :: Cint
 end
 
 struct Model
@@ -55,6 +56,7 @@ struct Model
     w             :: Ptr{Float64}
     label         :: Ptr{Cint}               # label of each class
     bias          :: Float64
+    rho           :: Float64                 # one-class SVM only
 end
 
 # model in julia
@@ -66,6 +68,7 @@ mutable struct LinearModel{T}
   _labels         :: Vector{Cint}            # internal label names
   labels          :: Vector{T}
   bias            :: Float64
+  rho             :: Float64
 end
 
 # helper
@@ -182,7 +185,9 @@ function linear_train(
             eps           :: Real=Inf,
             C             :: Real=1.0,
             p             :: Real=0.1,
+            nu            :: Real=0.5,
             init_sol      :: Ptr{Float64}=convert(Ptr{Float64}, C_NULL), # initial solutions for solvers L2R_LR, L2R_L2LOSS_SVC
+            regularize_bias :: Cint = Cint(1),
             bias          :: Real=-1.0,
             verbose       :: Bool=false
             ) where {T, U<:Real}
@@ -201,6 +206,7 @@ function linear_train(
         L2R_L2LOSS_SVR          =>  0.001,
         L2R_L2LOSS_SVR_DUAL     =>  0.1,
         L2R_L1LOSS_SVR_DUAL     =>  0.1,
+        ONECLASS_SVM            =>  0.01,
     )[solver_type])
 
     nfeatures = size(instances, 1) # instances are in columns
@@ -212,7 +218,7 @@ function linear_train(
 
     param = Array{Parameter}(undef, 1)
     param[1] = Parameter(solver_type, eps, C, Cint(length(weights)),
-        pointer(weight_labels), pointer(weights), p, init_sol)
+        pointer(weight_labels), pointer(weights), p, nu, init_sol, regularize_bias)
 
     # construct problem
     (nodes, nodeptrs) = instances2nodes(instances)
@@ -231,14 +237,21 @@ function linear_train(
                 (Ptr{Problem}, Ptr{Parameter}),
                 problem, param)
     m = unsafe_wrap(Array, ptr, 1)[1]
-
     # extract w & _labels
     w_dim    = Int(m.nr_feature + (bias >= 0 ? 1 : 0))
     w_number = Int(m.nr_class == 2 && solver_type != MCSVM_CS ? 1 : m.nr_class)
     w        = copy(unsafe_wrap(Array, m.w, w_dim * w_number))
-    _labels  = copy(unsafe_wrap(Array, m.label, m.nr_class))
+
+    # Fill in labels vector
+    # using `_labels  = copy(unsafe_wrap(Array, m.label, m.nr_class))` segfaults
+    # when using `ONECLASS_SVM`. With this approach, we are just left with
+    # `_labels` being -1's, which seems better.
+    _labels = Vector{Cint}(undef, m.nr_class)
+    _labels .= -1 # initialize to some invalid state
+    ccall((:get_labels, liblinear), Cvoid, (Ptr{Model},Ptr{Vector{Cint}}), ptr, pointer(_labels))
+    rho = solver_type == ONECLASS_SVM ? m.rho : 0.0
     model    = LinearModel(solver_type, Int(m.nr_class), Int(m.nr_feature),
-                    w, _labels, reverse_labels, m.bias)
+                    w, _labels, reverse_labels, m.bias, rho)
     ccall((:free_model_content, liblinear), Cvoid, (Ptr{Model},), ptr)
 
     model
@@ -262,13 +275,20 @@ function linear_predict(
 
     m = Array{Model}(undef, 1)
     m[1] = Model(Parameter(model.solver_type, .0, .0, Cint(0),
-            convert(Ptr{Cint}, C_NULL), convert(Ptr{Float64}, C_NULL), .0,
-            convert(Ptr{Float64}, C_NULL)),
+            convert(Ptr{Cint}, C_NULL), convert(Ptr{Float64}, C_NULL), .0,.0,
+            convert(Ptr{Float64}, C_NULL), Cint(0)),
             model.nr_class, model.nr_feature, pointer(model.w),
-            pointer(model._labels), model.bias)
+            pointer(model._labels), model.bias, model.rho)
 
     (nodes, nodeptrs) = instances2nodes(instances)
-    class = Array{T}(undef, ninstances)
+
+    if model.solver_type == ONECLASS_SVM
+        # In this case we need to return inlier/outlier class labels
+        # which may not be of type `T`
+        class = Array{String}(undef, ninstances)
+    else
+        class = Array{T}(undef, ninstances)
+    end
     w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ?
         1 : model.nr_class)
     decvalues = Array{Float64}(undef, w_number, ninstances)
@@ -280,7 +300,19 @@ function linear_predict(
             output = ccall((:predict_values, liblinear), Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
                 pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
         end
-        class[i] = model.labels[round(Int,output)]
+        output_int = round(Int,output)
+
+        # For one-class SVM, `predict_values` returns +/- 1
+        # corresponding to outliers or not. This doesn't seem to be documented,
+        # but the code clearly returns +/- 1:
+        # https://github.com/cjlin1/liblinear/blob/8dc206b782e07676dc0d00678bedd295ce85acf3/linear.cpp#L3295
+        # and that is the return from scipy as well.
+        if model.solver_type === ONECLASS_SVM
+            c = output_int == -1 ? "outlier" :  output_int == 1 ? "inlier" : error("Unexpected output $output_int")
+        else
+            c = model.labels[output_int]
+        end
+        class[i] = c
     end
 
     (class, decvalues)
