@@ -1,6 +1,7 @@
 # LIBLINEAR
 
 [![CI](https://github.com/innerlee/LIBLINEAR.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/innerlee/LIBLINEAR.jl/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/JuliaML/LIBLINEAR.jl/graph/badge.svg?token=wNqvTQNWY1)](https://codecov.io/gh/JuliaML/LIBLINEAR.jl)
 
 
 Julia bindings for [LIBLINEAR](https://www.csie.ntu.edu.tw/~cjlin/liblinear/).
