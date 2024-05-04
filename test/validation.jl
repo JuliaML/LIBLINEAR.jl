@@ -38,4 +38,13 @@
             @test (class .== labels[2:2:end]) == correct
         end
     end
+
+    @testset "Regression" begin
+        x = rand(1, 10000);
+        y = vec(2 .* x)
+        m = linear_train(y, x, solver_type=LIBLINEAR.L2R_L2LOSS_SVR, eps=1e-5)
+        y_ = first(linear_predict(m, x))
+        @test size(y, 1) == size(y_, 2) # TODO: provide better test
+    end
+
 end
