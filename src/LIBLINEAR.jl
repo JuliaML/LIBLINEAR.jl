@@ -23,6 +23,11 @@ const L2R_L2LOSS_SVR_DUAL = Cint(12)
 const L2R_L1LOSS_SVR_DUAL = Cint(13)
 const ONECLASS_SVM        = Cint(21)
 
+function is_regression_model(m)
+    solver = m.solver_type
+    return solver in (L2R_L2LOSS_SVR, L2R_L1LOSS_SVR_DUAL, L2R_L2LOSS_SVR_DUAL)
+end
+
 struct FeatureNode
     index         :: Cint
     value         :: Float64
@@ -257,6 +262,50 @@ function linear_train(
     model
 end
 
+
+function predict_decision_values(model, instances, probability_estimates)
+    ninstances = size(instances, 2) # instances are in columns
+    if size(instances, 1) != model.nr_feature
+        error("""Model has $(model.nr_feature) features but
+              $(size(instances, 1)) provided (instances are in columns)""")
+    end
+
+    if model.bias >= 0
+        instances = [instances; fill(model.bias, 1, ninstances)]
+    end
+
+    m = Model(Parameter(model.solver_type, .0, .0, Cint(0),
+                        convert(Ptr{Cint}, C_NULL), convert(Ptr{Float64}, C_NULL), .0,.0,
+                        convert(Ptr{Float64}, C_NULL), Cint(0)),
+              model.nr_class, model.nr_feature, pointer(model.w),
+              pointer(model._labels), model.bias, model.rho)
+
+    (nodes, nodeptrs) = instances2nodes(instances)
+
+    w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ? 1 : model.nr_class)
+    decvalues = Array{Float64}(undef, w_number, ninstances)
+    for i = 1:ninstances
+        if probability_estimates
+            output = ccall((:predict_probability, liblinear), Float64,
+                           (Ref{Model}, Ptr{FeatureNode}, Ptr{Float64}),
+                           m, nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
+        else
+            output = ccall((:predict_values, liblinear), Float64,
+                           (Ref{Model}, Ptr{FeatureNode}, Ptr{Float64}),
+                           m, nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
+        end
+    end
+
+    return decvalues
+end
+
+# For one-class SVM, `predict_values` returns +/- 1
+# corresponding to outliers or not. This doesn't seem to be documented,
+# but the code clearly returns +/- 1:
+# https://github.com/cjlin1/liblinear/blob/8dc206b782e07676dc0d00678bedd295ce85acf3/linear.cpp#L3295
+# and that is the return from scipy as well.
+oneclass_output(decval) = ifelse(only(decval) > 0, "inlier", "outlier")
+
 # predict
 function linear_predict(
             model                 :: LinearModel{T},
@@ -266,56 +315,20 @@ function linear_predict(
     set_print(verbose)
     ninstances = size(instances, 2) # instances are in columns
 
-    size(instances, 1) != model.nr_feature &&
-        error("""Model has $(model.nr_feature) features but
-            $(size(instances, 1)) provided (instances are in columns)""")
+    decvalues = predict_decision_values(model, instances, probability_estimates)
 
-    model.bias >= 0 &&
-        (instances = [instances; fill(model.bias, 1, ninstances)])
+    if is_regression_model(model)
+        return decvalues, decvalues
+    end
 
-    m = Array{Model}(undef, 1)
-    m[1] = Model(Parameter(model.solver_type, .0, .0, Cint(0),
-            convert(Ptr{Cint}, C_NULL), convert(Ptr{Float64}, C_NULL), .0,.0,
-            convert(Ptr{Float64}, C_NULL), Cint(0)),
-            model.nr_class, model.nr_feature, pointer(model.w),
-            pointer(model._labels), model.bias, model.rho)
-
-    (nodes, nodeptrs) = instances2nodes(instances)
-
-    if model.solver_type == ONECLASS_SVM
-        # In this case we need to return inlier/outlier class labels
-        # which may not be of type `T`
-        class = Array{String}(undef, ninstances)
+    if model.solver_type === ONECLASS_SVM
+        classes = map(oneclass_output, eachcol(decvalues))
     else
-        class = Array{T}(undef, ninstances)
-    end
-    w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ?
-        1 : model.nr_class)
-    decvalues = Array{Float64}(undef, w_number, ninstances)
-    for i = 1:ninstances
-        if probability_estimates
-            output = ccall((:predict_probability, liblinear), Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
-                pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
-        else
-            output = ccall((:predict_values, liblinear), Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
-                pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
-        end
-        output_int = round(Int,output)
-
-        # For one-class SVM, `predict_values` returns +/- 1
-        # corresponding to outliers or not. This doesn't seem to be documented,
-        # but the code clearly returns +/- 1:
-        # https://github.com/cjlin1/liblinear/blob/8dc206b782e07676dc0d00678bedd295ce85acf3/linear.cpp#L3295
-        # and that is the return from scipy as well.
-        if model.solver_type === ONECLASS_SVM
-            c = output_int == -1 ? "outlier" :  output_int == 1 ? "inlier" : error("Unexpected output $output_int")
-        else
-            c = model.labels[output_int]
-        end
-        class[i] = c
+        classes = map(decvals -> model.labels[argmax(decvals)],
+                      eachcol(decvalues))
     end
 
-    (class, decvalues)
+    return classes, decvalues
 end
 
 end # module
