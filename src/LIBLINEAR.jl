@@ -248,7 +248,7 @@ function linear_train(
     # `_labels` being -1's, which seems better.
     _labels = Vector{Cint}(undef, m.nr_class)
     _labels .= -1 # initialize to some invalid state
-    ccall((:get_labels, liblinear), Cvoid, (Ptr{Model},Ptr{Vector{Cint}}), ptr, pointer(_labels))
+    ccall((:get_labels, liblinear), Cvoid, (Ptr{Model},Ptr{Vector{Cint}}), ptr, _labels)
     rho = solver_type == ONECLASS_SVM ? m.rho : 0.0
     model    = LinearModel(solver_type, Int(m.nr_class), Int(m.nr_feature),
                     w, _labels, reverse_labels, m.bias, rho)
@@ -292,13 +292,13 @@ function linear_predict(
     w_number = Int(model.nr_class == 2 && model.solver_type != MCSVM_CS ?
         1 : model.nr_class)
     decvalues = Array{Float64}(undef, w_number, ninstances)
-    for i = 1:ninstances
+    GC.@preserve decvalues for i = 1:ninstances
         if probability_estimates
             output = ccall((:predict_probability, liblinear), Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
-                pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
+                m, nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
         else
             output = ccall((:predict_values, liblinear), Float64, (Ptr{Cvoid}, Ptr{FeatureNode}, Ptr{Float64}),
-                pointer(m), nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
+                m, nodeptrs[i], pointer(decvalues, w_number*(i-1)+1))
         end
         output_int = round(Int,output)
 
